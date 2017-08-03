@@ -5,3 +5,12 @@ Demonstrates how to use the Fused Location Provider API to get updates about a d
 This uses the [FusedLocationProviderClient] (https://developer.android.com/reference/com/google/android/gms/location/LocationServices.html).
 
 To run this sample, location must be enabled.
+
+
+```html
+<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+<uses-permission android:name="android.permission.INTERNET" />
+
+<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+```
