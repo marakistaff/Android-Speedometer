@@ -17,7 +17,6 @@ import android.support.annotation.NonNull;
 import android.support.design.widget.Snackbar;
 import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
-import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -391,11 +390,9 @@ public class MainActivity extends AppCompatActivity
         switch (resultCode)
         {
           case Activity.RESULT_OK:
-            Log.i(TAG, "User agreed to make required location settings changes.");
             // Nothing to do. startLocationupdates() gets called in onResume again.
             break;
           case Activity.RESULT_CANCELED:
-            Log.i(TAG, "User chose not to make required location settings changes.");
             mRequestingLocationUpdates = false;
             updateLocationUI();
             break;
@@ -444,8 +441,6 @@ public class MainActivity extends AppCompatActivity
         @Override
         public void onSuccess(LocationSettingsResponse locationSettingsResponse)
         {
-          Log.i(TAG, "All location settings are satisfied.");
-
           //noinspection MissingPermission
           mFusedLocationClient.requestLocationUpdates(mLocationRequest,
             mLocationCallback, Looper.myLooper());
@@ -462,23 +457,19 @@ public class MainActivity extends AppCompatActivity
           switch (statusCode)
           {
             case LocationSettingsStatusCodes.RESOLUTION_REQUIRED:
-              Log.i(TAG, "Location settings are not satisfied. Attempting to upgrade " +
-                "location settings ");
               try
               {
                 // Show the dialog by calling startResolutionForResult(), and check the
                 // result in onActivityResult().
                 ResolvableApiException rae = (ResolvableApiException) e;
                 rae.startResolutionForResult(MainActivity.this, REQUEST_CHECK_SETTINGS);
-              } catch (IntentSender.SendIntentException sie)
+              } catch (IntentSender.SendIntentException ignored)
               {
-                Log.i(TAG, "PendingIntent unable to execute request.");
               }
               break;
             case LocationSettingsStatusCodes.SETTINGS_CHANGE_UNAVAILABLE:
               String errorMessage = "Location settings are inadequate, and cannot be " +
                 "fixed here. Fix in PrefActivity.";
-              Log.e(TAG, errorMessage);
               Toast.makeText(MainActivity.this, errorMessage, Toast.LENGTH_LONG).show();
               mRequestingLocationUpdates = false;
           }
@@ -550,7 +541,6 @@ public class MainActivity extends AppCompatActivity
 
     if (!mRequestingLocationUpdates)
     {
-      Log.d(TAG, "stopLocationUpdates: updates never requested, no-op.");
       return;
     }
 
@@ -646,7 +636,6 @@ public class MainActivity extends AppCompatActivity
     // request previously, but didn't check the "Don't ask again" checkbox.
     if (shouldProvideRationale)
     {
-      Log.i(TAG, "Displaying permission rationale to provide additional context.");
       showSnackbar(R.string.permission_rationale,
         android.R.string.ok, new View.OnClickListener()
         {
@@ -661,7 +650,6 @@ public class MainActivity extends AppCompatActivity
         });
     } else
     {
-      Log.i(TAG, "Requesting permission");
       // Request permission. It's possible this can be auto answered if device policy
       // sets the permission in a given state or the user denied the permission
       // previously and checked "Never ask again".
@@ -678,19 +666,16 @@ public class MainActivity extends AppCompatActivity
   public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
                                          @NonNull int[] grantResults)
   {
-    Log.i(TAG, "onRequestPermissionResult");
     if (requestCode == REQUEST_PERMISSIONS_REQUEST_CODE)
     {
       if (grantResults.length <= 0)
       {
         // If user interaction was interrupted, the permission request is cancelled and you
         // receive empty arrays.
-        Log.i(TAG, "User interaction was cancelled.");
       } else if (grantResults[0] == PackageManager.PERMISSION_GRANTED)
       {
         if (mRequestingLocationUpdates)
         {
-          Log.i(TAG, "Permission granted, updates requested, starting location updates");
           startLocationUpdates();
         }
       } else
