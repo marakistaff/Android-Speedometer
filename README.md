@@ -6,6 +6,7 @@ This uses the [FusedLocationProviderClient] (https://developer.android.com/refer
 
 To run this sample, location must be enabled.
 
+# Manifest Permissions
 
 ```html
 <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
