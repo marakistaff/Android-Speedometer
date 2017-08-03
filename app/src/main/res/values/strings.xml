@@ -1,3 +1,21 @@
 <resources>
     <string name="app_name">Android Speedometer</string>
+    <string name="action_settings">Settings</string>
+    <string name="_123_45">12.34</string>
+    <string name="mph">MPH</string>
+    <string name="top_speed">Top Speed</string>
+    <string name="avg_speed">Avg Speed</string>
+    <string name="duration">Duration</string>
+    <string name="est_distance">Est Distance</string>
+    <string name="start_updates">Start</string>
+    <string name="blank_time">00:00</string>
+    <string name="stop_updates">Stop</string>
+    <string name="permission_rationale">Location permission is needed for core functionality</string>
+    <string name="permission_denied_explanation">Permission was denied, but is needed for core
+        functionality.</string>
+    <string name="settings">Settings</string>
+    <string name="choose_speed_measurement">Choose Speed Measurement</string>
+    <string name="m_s">M/S</string>
+    <string name="__mph">MPH</string>
+    <string name="kph">KPH</string>
 </resources>
