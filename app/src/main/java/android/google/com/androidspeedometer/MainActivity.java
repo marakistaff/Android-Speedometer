@@ -195,8 +195,6 @@ public class MainActivity extends AppCompatActivity
 
         String buttonText = mStartStopButton.getText().toString();
 
-        Log.w("xxxxx",""+buttonText);
-
         if (buttonText.equals("Start"))
         {
           hiddenLayout.setVisibility(View.INVISIBLE);
@@ -417,6 +415,7 @@ public class MainActivity extends AppCompatActivity
   public void startUpdatesButtonHandler(View view)
   {
     this.mStartStopButton.setText(R.string.stop_updates);
+    this.mStartStopButton.setBackgroundResource(R.drawable.stop_button);
     if (!mRequestingLocationUpdates)
     {
       mRequestingLocationUpdates = true;

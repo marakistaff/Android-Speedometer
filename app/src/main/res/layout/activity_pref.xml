@@ -5,6 +5,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@android:color/background_light"
     android:orientation="vertical"
     tools:context="android.google.com.androidspeedometer.PrefActivity">
 
@@ -18,6 +19,7 @@
             android:id="@+id/text1"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:textColor="@android:color/black"
             android:text="@string/choose_speed_measurement"
             android:textAlignment="center"
             android:textSize="18sp"
@@ -30,8 +32,9 @@
         android:id="@+id/buttonHolder"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_centerHorizontal="false"
         android:layout_below="@+id/toptext"
+        android:layout_centerHorizontal="false"
+        android:layout_marginTop="20dp"
         android:gravity="center_horizontal"
         android:orientation="horizontal">
 
@@ -70,14 +73,15 @@
         android:id="@+id/textHolder"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_below="@+id/buttonHolder"
         android:gravity="center_horizontal"
-        android:orientation="horizontal"
-        android:layout_below="@+id/buttonHolder">
+        android:orientation="horizontal">
 
         <TextView
             android:id="@+id/rb1"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:textColor="@android:color/black"
             android:text="@string/m_s"
             android:textSize="14sp"
             android:textStyle="bold"/>
@@ -86,16 +90,18 @@
             android:id="@+id/rb2"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginEnd="55dp"
+            android:layout_marginStart="55dp"
+            android:textColor="@android:color/black"
             android:text="@string/__mph"
             android:textSize="14sp"
-            android:textStyle="bold"
-            android:layout_marginEnd="55dp"
-            android:layout_marginStart="55dp"/>
+            android:textStyle="bold"/>
 
         <TextView
             android:id="@+id/rb3"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:textColor="@android:color/black"
             android:text="@string/kph"
             android:textSize="14sp"
             android:textStyle="bold"/>
