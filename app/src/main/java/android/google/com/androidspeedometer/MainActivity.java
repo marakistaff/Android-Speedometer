@@ -251,8 +251,7 @@ public class MainActivity extends AppCompatActivity
 
     return super.onOptionsItemSelected(item);
   }
-
-
+  
   // stops chronometer and displays invisible layout
   private void stopAll()
   {
@@ -267,9 +266,7 @@ public class MainActivity extends AppCompatActivity
 
     double dist = myAverageSpeed * hh;
     myDistance = round(dist, 3);
-
-    Log.w("---", "" + myDistance);
-
+    
     mTopSpeedTextView.setText(String.format(Locale.ENGLISH, "%.2f", topSpeed));
     mAvgSpeedTextView.setText(averageSpeed);
     mDurationTextView.setText(String.valueOf(simpleChronometer.getText().toString()));
@@ -279,7 +276,6 @@ public class MainActivity extends AppCompatActivity
     this.hiddenLayout.setVisibility(View.VISIBLE);
     this.simpleChronometer.stop();
     this.simpleChronometer.setText(R.string.blank_time);
-
   }
 
   public static double round(double value, int places)
@@ -326,7 +322,7 @@ public class MainActivity extends AppCompatActivity
         mCurrentLocation = savedInstanceState.getParcelable(KEY_LOCATION);
       }
 
-      updateUI();
+      updateLocationUI();
     }
   }
 
@@ -401,7 +397,7 @@ public class MainActivity extends AppCompatActivity
           case Activity.RESULT_CANCELED:
             Log.i(TAG, "User chose not to make required location settings changes.");
             mRequestingLocationUpdates = false;
-            updateUI();
+            updateLocationUI();
             break;
         }
         break;
@@ -454,7 +450,7 @@ public class MainActivity extends AppCompatActivity
           mFusedLocationClient.requestLocationUpdates(mLocationRequest,
             mLocationCallback, Looper.myLooper());
 
-          updateUI();
+          updateLocationUI();
         }
       })
       .addOnFailureListener(this, new OnFailureListener()
@@ -487,19 +483,10 @@ public class MainActivity extends AppCompatActivity
               mRequestingLocationUpdates = false;
           }
 
-          updateUI();
+          updateLocationUI();
         }
       });
   }
-
-  /**
-   * Updates all UI fields.
-   */
-  private void updateUI()
-  {
-    updateLocationUI();
-  }
-
 
   /**
    * Sets the value of the UI fields for current speed.
@@ -510,7 +497,6 @@ public class MainActivity extends AppCompatActivity
     {
 
       double mSpeed;
-
       float currentSpeed = mCurrentLocation.getSpeed();
 
       switch (myPref_type)
@@ -536,9 +522,7 @@ public class MainActivity extends AppCompatActivity
       }
       String speedStr = String.format(Locale.ENGLISH, "%.2f", mSpeed);
       this.mSpeedTextView.setText(speedStr);
-
       myAverageSpeed = calculateAverage(speedArray);
-
       this.averageSpeed = String.format(Locale.ENGLISH, "%.2f", myAverageSpeed);
     }
   }
@@ -599,7 +583,7 @@ public class MainActivity extends AppCompatActivity
       requestPermissions();
     }
 
-    updateUI();
+    updateLocationUI();
   }
 
   @Override
