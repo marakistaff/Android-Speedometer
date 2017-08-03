@@ -39,7 +39,6 @@
             android:text="@string/mph"
             android:textSize="25sp"
             android:textStyle="bold"/>
-
     </LinearLayout>
 
     <RelativeLayout
@@ -58,9 +57,7 @@
             android:layout_centerHorizontal="true"
             android:textSize="30sp"
             android:textStyle="bold"/>
-
     </RelativeLayout>
-
 
     <RelativeLayout
         android:id="@+id/hideLayout"
@@ -174,7 +171,6 @@
                 android:textStyle="bold"/>
         </RelativeLayout>
 
-
     </RelativeLayout>
 
     <RelativeLayout
@@ -193,8 +189,6 @@
             android:gravity="center"
             android:text="@string/start_updates"
             android:textAlignment="center"/>
-
     </RelativeLayout>
-
 
 </RelativeLayout>

@@ -180,8 +180,10 @@ public class MainActivity extends AppCompatActivity
           measurement = "kms";
           break;
       }
-
-
+    }
+    else
+    {
+      this.myPref_type = "kms";
     }
 
     // Add button listener
@@ -192,7 +194,10 @@ public class MainActivity extends AppCompatActivity
       {
 
         String buttonText = mStartStopButton.getText().toString();
-        if (buttonText.equals("START"))
+
+        Log.w("xxxxx",""+buttonText);
+
+        if (buttonText.equals("Start"))
         {
           hiddenLayout.setVisibility(View.INVISIBLE);
           startUpdatesButtonHandler(v);
@@ -201,7 +206,8 @@ public class MainActivity extends AppCompatActivity
             simpleChronometer.setBase(SystemClock.elapsedRealtime());
             simpleChronometer.start();
           }
-        } else
+        }
+        else
         {
           stopUpdatesButtonHandler(v);
           stopAll();
@@ -249,7 +255,6 @@ public class MainActivity extends AppCompatActivity
   }
 
 
-
   // stops chronometer and displays invisible layout
   private void stopAll()
   {
@@ -259,18 +264,18 @@ public class MainActivity extends AppCompatActivity
     TextView mDistanceTextView = (TextView) findViewById(R.id.hideLabelDistance);
 
     int elapsedMillis = (int) (SystemClock.elapsedRealtime() - simpleChronometer.getBase());
-    long dd = (long)elapsedMillis;
+    long dd = (long) elapsedMillis;
     double hh = getHour(dd);
 
     double dist = myAverageSpeed * hh;
     myDistance = round(dist, 3);
 
-    Log.w("---",""+myDistance);
+    Log.w("---", "" + myDistance);
 
     mTopSpeedTextView.setText(String.format(Locale.ENGLISH, "%.2f", topSpeed));
     mAvgSpeedTextView.setText(averageSpeed);
     mDurationTextView.setText(String.valueOf(simpleChronometer.getText().toString()));
-    String distanceOutput = String.valueOf(myDistance)+ " "+measurement;
+    String distanceOutput = String.valueOf(myDistance) + " " + measurement;
     mDistanceTextView.setText(distanceOutput);
 
     this.hiddenLayout.setVisibility(View.VISIBLE);
@@ -279,7 +284,8 @@ public class MainActivity extends AppCompatActivity
 
   }
 
-  public static double round(double value, int places) {
+  public static double round(double value, int places)
+  {
     if (places < 0) throw new IllegalArgumentException();
 
     BigDecimal bd = new BigDecimal(value);
@@ -290,7 +296,7 @@ public class MainActivity extends AppCompatActivity
   public static double getHour(long ms)
   {
     DecimalFormat df = new DecimalFormat(".######");
-    double totalSecs = ms/1000;
+    double totalSecs = ms / 1000;
     String hours = df.format(totalSecs / 3600.0);
 
     return Double.valueOf(hours);
@@ -618,7 +624,6 @@ public class MainActivity extends AppCompatActivity
 
 
   // PERMISSIONS
-
 
 
   /**
