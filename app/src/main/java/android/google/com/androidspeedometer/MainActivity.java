@@ -130,6 +130,8 @@ public class MainActivity extends AppCompatActivity
 
   // UI Widgets.
   private Button mStartStopButton;
+  private TextView mSpeedTextView;
+  private Chronometer simpleChronometer;
 
   /**
    * Tracks the status of the location updates request. Value changes when the user presses the
@@ -172,16 +174,12 @@ public class MainActivity extends AppCompatActivity
   private String mStartAddress = "", mStopAddress = "";
   private double mStartLatitude, mStartLongitude, mStopLatitude, mStopLongitude;
 
-  String mStartTime, mStopTime;
+  private String mStartTime, mStopTime;
 
-  TextView mSpeedTextView;
-  private Chronometer simpleChronometer;
+  private String mPreference;
 
-  String mPreference;
-  private String measurement = "";
-
-  public static final double mph = 2.23694;
-  public static final double kph = 3.6;
+  private  static final double mph = 2.23694;
+  private  static final double kph = 3.6;
 
   private double topSpeed = 0;
 
@@ -212,19 +210,6 @@ public class MainActivity extends AppCompatActivity
     if (this.mPreference != null)
     {
       mSpeedTypeTextView.setText(mPreference);
-
-      switch (this.mPreference)
-      {
-        case "ms":
-          measurement = "meters";
-          break;
-        case "mph":
-          measurement = "miles";
-          break;
-        default:
-          measurement = "kms";
-          break;
-      }
     }
     else
     {
@@ -245,13 +230,13 @@ public class MainActivity extends AppCompatActivity
       @Override
       public void onClick(View v)
       {
-
         String buttonText = mStartStopButton.getText().toString();
 
         if (buttonText.equalsIgnoreCase("Start"))
         {
           startUpdatesButtonHandler(v);
-        } else
+        }
+        else
         {
           stopUpdatesButtonHandler(v);
         }
@@ -533,8 +518,8 @@ public class MainActivity extends AppCompatActivity
     if (mRequestingLocationUpdates)
     {
       mStartStopButton.setText(R.string.stop_updates);
-
-    } else
+    }
+    else
     {
       mStartStopButton.setText(R.string.start_updates);
     }
@@ -547,7 +532,6 @@ public class MainActivity extends AppCompatActivity
   {
     if (mCurrentLocation != null)
     {
-
       if (mStartAddress.length() < 1)
       {
         simpleChronometer.setBase(SystemClock.elapsedRealtime());
@@ -582,7 +566,6 @@ public class MainActivity extends AppCompatActivity
 
       String speedStr = String.format(Locale.getDefault(), "%.2f", mSpeed);
       this.mSpeedTextView.setText(speedStr);
-
     }
 
     mAddressRequested = true;
@@ -633,7 +616,8 @@ public class MainActivity extends AppCompatActivity
     if (mRequestingLocationUpdates && checkPermissions())
     {
       startLocationUpdates();
-    } else if (!checkPermissions())
+    }
+    else if (!checkPermissions())
     {
       requestPermissions();
     }
@@ -739,7 +723,7 @@ public class MainActivity extends AppCompatActivity
     }
 
     /**
-     * Receives data sent from FetchAddressIntentService and updates the UI in MainActivity.
+     * Receives data sent from FetchAddressIntentService.
      */
     @Override
     protected void onReceiveResult(int resultCode, Bundle resultData)
@@ -755,21 +739,19 @@ public class MainActivity extends AppCompatActivity
         if (mStartAddress.length() < 1)
         {
           mStartAddress = mAddressOutput;
-        } else
+        }
+        else
         {
-
           mStopAddress = mAddressOutput;
           simpleChronometer.stop();
           stopLocationUpdates();
           setButtonsEnabledState();
           passData();
         }
-
       }
 
       // Reset. Enable the Fetch Address button and stop showing the progress bar.
       mAddressRequested = false;
-      //updateUIWidgets();
     }
   }
 
@@ -907,12 +889,8 @@ public class MainActivity extends AppCompatActivity
 
   public void passData()
   {
-    // get average from array
-//    double temp = utils.calculateAverage(speedArray);
-//    String mAverageSpeed = String.format(Locale.ENGLISH, "%.2f", temp);
-
-
     HashMap<String, String> hashMap = new HashMap<>();
+
     hashMap.put("start_time", mStartTime);
     hashMap.put("start_address", mStartAddress);
     hashMap.put("start_lat", String.valueOf(mStartLatitude));
