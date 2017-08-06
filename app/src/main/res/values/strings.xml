@@ -18,4 +18,10 @@
     <string name="m_s">M/S</string>
     <string name="__mph">MPH</string>
     <string name="kph">KPH</string>
+    <string name="service_not_available">Unable to get address</string>
+    <string name="invalid_lat_long_used">invalid_lat</string>
+    <string name="no_address_found">no_address_found</string>
+    <string name="address_found">address_found</string>
+    <string name="no_location_data_provided">No data</string>
+    <string name="no_geocoder_available">No geocoder available</string>
 </resources>

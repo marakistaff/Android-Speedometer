@@ -7,23 +7,26 @@ import android.content.IntentSender;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Typeface;
+import android.location.Geocoder;
 import android.location.Location;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.Looper;
+import android.os.ResultReceiver;
 import android.os.SystemClock;
 import android.provider.Settings;
 import android.support.annotation.NonNull;
 import android.support.design.widget.Snackbar;
 import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.Chronometer;
-import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -43,14 +46,25 @@ import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.text.DecimalFormat;
+import java.text.DateFormat;
 import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 
 
+/**
+ * Using location settings.
+ * <p/>
+ * Uses the {@link com.google.android.gms.location.SettingsApi} to ensure that the device's system
+ * settings are properly configured for the app's location needs. When making a request to
+ * Location services, the device's system settings may be in a state that prevents the app from
+ * obtaining the location data that it needs. For example, GPS or Wi-Fi scanning may be switched
+ * off. The {@code SettingsApi} makes it possible to determine if a device's system settings are
+ * adequate for the location request, and to optionally invoke a dialog that allows the user to
+ * enable the necessary settings.
+ */
 public class MainActivity extends AppCompatActivity
 {
 
@@ -81,6 +95,7 @@ public class MainActivity extends AppCompatActivity
   // Keys for storing activity state in the Bundle.
   private final static String KEY_REQUESTING_LOCATION_UPDATES = "requesting-location-updates";
   private final static String KEY_LOCATION = "location";
+  private final static String KEY_LAST_UPDATED_TIME_STRING = "last-updated-time-string";
 
   /**
    * Provides access to the Fused Location Provider API.
@@ -88,7 +103,7 @@ public class MainActivity extends AppCompatActivity
   private FusedLocationProviderClient mFusedLocationClient;
 
   /**
-   * Provides access to the Location API.
+   * Provides access to the Location Settings API.
    */
   private SettingsClient mSettingsClient;
 
@@ -113,19 +128,8 @@ public class MainActivity extends AppCompatActivity
    */
   private Location mCurrentLocation;
 
-  double myDistance;
-  double myAverageSpeed;
-  private double topSpeed = 0;
-  private String averageSpeed;
-  private String measurement = "";
-
-  public static final double mph = 2.23694;
-  public static final double kph = 3.6;
-
   // UI Widgets.
   private Button mStartStopButton;
-  private TextView mSpeedTextView;
-  private Chronometer simpleChronometer;
 
   /**
    * Tracks the status of the location updates request. Value changes when the user presses the
@@ -133,10 +137,55 @@ public class MainActivity extends AppCompatActivity
    */
   private Boolean mRequestingLocationUpdates;
 
-  private RelativeLayout hiddenLayout;
-  private String myPref_type = "ms";
-  private List<Double> speedArray = new ArrayList<>();
+  private static final String ADDRESS_REQUESTED_KEY = "address-request-pending";
+  private static final String LOCATION_ADDRESS_KEY = "location-address";
 
+
+  /**
+   * Represents a geographical location.
+   */
+  private Location mLastLocation;
+
+  /**
+   * Tracks whether the user has requested an address. Becomes true when the user requests an
+   * address and false when the address (or an error message) is delivered.
+   */
+  private boolean mAddressRequested;
+
+  /**
+   * The formatted location address.
+   */
+  private String mAddressOutput;
+
+  /**
+   * Receiver registered with this activity to get the response from FetchAddressIntentService.
+   */
+  private AddressResultReceiver mResultReceiver;
+
+  /**
+   * Time when the location was updated represented as a String.
+   */
+  private String mLastUpdateTime;
+
+  //
+
+  private String mStartAddress = "", mStopAddress = "";
+  private double mStartLatitude, mStartLongitude, mStopLatitude, mStopLongitude;
+
+  String mStartTime, mStopTime;
+
+  TextView mSpeedTextView;
+  private Chronometer simpleChronometer;
+
+  String mPreference;
+  private String measurement = "";
+
+  public static final double mph = 2.23694;
+  public static final double kph = 3.6;
+
+  private double topSpeed = 0;
+
+  private List<Double> speedArray = new ArrayList<>();
 
   @Override
   public void onCreate(Bundle savedInstanceState)
@@ -144,11 +193,9 @@ public class MainActivity extends AppCompatActivity
     super.onCreate(savedInstanceState);
     setContentView(R.layout.activity_main);
 
-    // keep sceen on
-    getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-
     // custom font
     Typeface custom_font = Typeface.createFromAsset(getAssets(), "fonts/myfont.ttf");
+
     // Locate the UI widgets.
     mSpeedTextView = (TextView) findViewById(R.id.speed_text);
     mSpeedTextView.setTypeface(custom_font);
@@ -157,17 +204,16 @@ public class MainActivity extends AppCompatActivity
     simpleChronometer = (Chronometer) findViewById(R.id.simpleChronometer);
     simpleChronometer.setTypeface(custom_font);
     mStartStopButton = (Button) findViewById(R.id.start_updates_button);
-    hiddenLayout = (RelativeLayout) findViewById(R.id.hideLayout);
 
     //Reading from SharedPreferences
     SharedPreferences pref = getApplicationContext().getSharedPreferences("speedPref", MODE_PRIVATE);
-    myPref_type = pref.getString("pref_type", null);
+    mPreference = pref.getString("pref_type", null);
 
-    if (this.myPref_type != null)
+    if (this.mPreference != null)
     {
-      mSpeedTypeTextView.setText(myPref_type);
+      mSpeedTypeTextView.setText(mPreference);
 
-      switch (this.myPref_type)
+      switch (this.mPreference)
       {
         case "ms":
           measurement = "meters";
@@ -182,8 +228,16 @@ public class MainActivity extends AppCompatActivity
     }
     else
     {
-      this.myPref_type = "kms";
+      this.mPreference = "miles";
     }
+
+    mResultReceiver = new AddressResultReceiver(new Handler());
+    mAddressRequested = false;
+    mAddressOutput = "";
+
+    // keep sceen on
+    getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
 
     // Add button listener
     this.mStartStopButton.setOnClickListener(new View.OnClickListener()
@@ -194,32 +248,25 @@ public class MainActivity extends AppCompatActivity
 
         String buttonText = mStartStopButton.getText().toString();
 
-        if (buttonText.equals("Start"))
+        if (buttonText.equalsIgnoreCase("Start"))
         {
-          hiddenLayout.setVisibility(View.INVISIBLE);
           startUpdatesButtonHandler(v);
-          if (mRequestingLocationUpdates)
-          {
-            simpleChronometer.setBase(SystemClock.elapsedRealtime());
-            simpleChronometer.start();
-          }
-        }
-        else
+        } else
         {
           stopUpdatesButtonHandler(v);
-          stopAll();
         }
       }
     });
 
 
-    this.mRequestingLocationUpdates = false;
+    mRequestingLocationUpdates = false;
+    mLastUpdateTime = "";
 
     // Update values using data stored in the Bundle.
     updateValuesFromBundle(savedInstanceState);
 
-    this.mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
-    this.mSettingsClient = LocationServices.getSettingsClient(this);
+    mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
+    mSettingsClient = LocationServices.getSettingsClient(this);
 
     // Kick off the process of building the LocationCallback, LocationRequest, and
     // LocationSettingsRequest objects.
@@ -245,54 +292,11 @@ public class MainActivity extends AppCompatActivity
     {
       Intent intent = new Intent(this, PrefActivity.class);
       this.startActivity(intent);
+
       return true;
     }
 
     return super.onOptionsItemSelected(item);
-  }
-  
-  // stops chronometer and displays invisible layout
-  private void stopAll()
-  {
-    TextView mTopSpeedTextView = (TextView) findViewById(R.id.hideLabelTopSpeed);
-    TextView mAvgSpeedTextView = (TextView) findViewById(R.id.hideLabelAvgSpeed);
-    TextView mDurationTextView = (TextView) findViewById(R.id.hideLabelDuration);
-    TextView mDistanceTextView = (TextView) findViewById(R.id.hideLabelDistance);
-
-    int elapsedMillis = (int) (SystemClock.elapsedRealtime() - simpleChronometer.getBase());
-    long dd = (long) elapsedMillis;
-    double hh = getHour(dd);
-
-    double dist = myAverageSpeed * hh;
-    myDistance = round(dist, 3);
-    
-    mTopSpeedTextView.setText(String.format(Locale.ENGLISH, "%.2f", topSpeed));
-    mAvgSpeedTextView.setText(averageSpeed);
-    mDurationTextView.setText(String.valueOf(simpleChronometer.getText().toString()));
-    String distanceOutput = String.valueOf(myDistance) + " " + measurement;
-    mDistanceTextView.setText(distanceOutput);
-
-    this.hiddenLayout.setVisibility(View.VISIBLE);
-    this.simpleChronometer.stop();
-    this.simpleChronometer.setText(R.string.blank_time);
-  }
-
-  public static double round(double value, int places)
-  {
-    if (places < 0) throw new IllegalArgumentException();
-
-    BigDecimal bd = new BigDecimal(value);
-    bd = bd.setScale(places, RoundingMode.HALF_UP);
-    return bd.doubleValue();
-  }
-
-  public static double getHour(long ms)
-  {
-    DecimalFormat df = new DecimalFormat(".######");
-    double totalSecs = ms / 1000;
-    String hours = df.format(totalSecs / 3600.0);
-
-    return Double.valueOf(hours);
   }
 
   /**
@@ -304,6 +308,17 @@ public class MainActivity extends AppCompatActivity
   {
     if (savedInstanceState != null)
     {
+      // Check savedInstanceState to see if the address was previously requested.
+      if (savedInstanceState.keySet().contains(ADDRESS_REQUESTED_KEY))
+      {
+        mAddressRequested = savedInstanceState.getBoolean(ADDRESS_REQUESTED_KEY);
+      }
+      // Check savedInstanceState to see if the location address string was previously found
+      // and stored in the Bundle. If it was found, display the address string in the UI.
+      if (savedInstanceState.keySet().contains(LOCATION_ADDRESS_KEY))
+      {
+        mAddressOutput = savedInstanceState.getString(LOCATION_ADDRESS_KEY);
+      }
       // Update the value of mRequestingLocationUpdates from the Bundle, and make sure that
       // the Start Updates and Stop Updates buttons are correctly enabled or disabled.
       if (savedInstanceState.keySet().contains(KEY_REQUESTING_LOCATION_UPDATES))
@@ -321,7 +336,12 @@ public class MainActivity extends AppCompatActivity
         mCurrentLocation = savedInstanceState.getParcelable(KEY_LOCATION);
       }
 
-      updateLocationUI();
+      // Update the value of mLastUpdateTime from the Bundle and update the UI.
+      if (savedInstanceState.keySet().contains(KEY_LAST_UPDATED_TIME_STRING))
+      {
+        mLastUpdateTime = savedInstanceState.getString(KEY_LAST_UPDATED_TIME_STRING);
+      }
+      updateUI();
     }
   }
 
@@ -342,11 +362,16 @@ public class MainActivity extends AppCompatActivity
   {
     mLocationRequest = new LocationRequest();
 
-    // Sets the desired interval for active location updates - not 100% accurate
+    // Sets the desired interval for active location updates. This interval is
+    // inexact. You may not receive updates at all if no location sources are available, or
+    // you may receive them slower than requested. You may also receive updates faster than
+    // requested if other applications are requesting location at a faster interval.
     mLocationRequest.setInterval(UPDATE_INTERVAL_IN_MILLISECONDS);
 
-    // Sets the fastest rate for active location updates.
+    // Sets the fastest rate for active location updates. This interval is exact, and your
+    // application will never receive updates faster than this value.
     mLocationRequest.setFastestInterval(FASTEST_UPDATE_INTERVAL_IN_MILLISECONDS);
+
     mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
   }
 
@@ -363,6 +388,7 @@ public class MainActivity extends AppCompatActivity
         super.onLocationResult(locationResult);
 
         mCurrentLocation = locationResult.getLastLocation();
+        mLastUpdateTime = DateFormat.getTimeInstance().format(new Date());
         updateLocationUI();
       }
     };
@@ -390,11 +416,13 @@ public class MainActivity extends AppCompatActivity
         switch (resultCode)
         {
           case Activity.RESULT_OK:
+            Log.i(TAG, "User agreed to make required location settings changes.");
             // Nothing to do. startLocationupdates() gets called in onResume again.
             break;
           case Activity.RESULT_CANCELED:
+            Log.i(TAG, "User chose not to make required location settings changes.");
             mRequestingLocationUpdates = false;
-            updateLocationUI();
+            updateUI();
             break;
         }
         break;
@@ -407,11 +435,10 @@ public class MainActivity extends AppCompatActivity
    */
   public void startUpdatesButtonHandler(View view)
   {
-    this.mStartStopButton.setText(R.string.stop_updates);
-    this.mStartStopButton.setBackgroundResource(R.drawable.stop_button);
     if (!mRequestingLocationUpdates)
     {
       mRequestingLocationUpdates = true;
+      setButtonsEnabledState();
       startLocationUpdates();
     }
   }
@@ -421,11 +448,12 @@ public class MainActivity extends AppCompatActivity
    */
   public void stopUpdatesButtonHandler(View view)
   {
-    // It is a good practice to remove location requests when the activity is in a paused or
-    // stopped state. Doing so helps battery performance and is especially
-    // recommended in applications that request frequent location updates.
-    mStartStopButton.setText(R.string.start_updates);
-    stopLocationUpdates();
+    mStopTime = utils.getCurrentDateTime();
+    mStopLatitude = mCurrentLocation.getLatitude();
+    mStopLongitude = mCurrentLocation.getLongitude();
+
+    mLastLocation = mCurrentLocation;
+    startIntentService();
   }
 
   /**
@@ -441,11 +469,13 @@ public class MainActivity extends AppCompatActivity
         @Override
         public void onSuccess(LocationSettingsResponse locationSettingsResponse)
         {
+          Log.i(TAG, "All location settings are satisfied.");
+
           //noinspection MissingPermission
           mFusedLocationClient.requestLocationUpdates(mLocationRequest,
             mLocationCallback, Looper.myLooper());
 
-          updateLocationUI();
+          updateUI();
         }
       })
       .addOnFailureListener(this, new OnFailureListener()
@@ -457,40 +487,78 @@ public class MainActivity extends AppCompatActivity
           switch (statusCode)
           {
             case LocationSettingsStatusCodes.RESOLUTION_REQUIRED:
+              Log.i(TAG, "Location settings are not satisfied. Attempting to upgrade " +
+                "location settings ");
               try
               {
                 // Show the dialog by calling startResolutionForResult(), and check the
                 // result in onActivityResult().
                 ResolvableApiException rae = (ResolvableApiException) e;
                 rae.startResolutionForResult(MainActivity.this, REQUEST_CHECK_SETTINGS);
-              } catch (IntentSender.SendIntentException ignored)
+              } catch (IntentSender.SendIntentException sie)
               {
+                Log.i(TAG, "PendingIntent unable to execute request.");
               }
               break;
             case LocationSettingsStatusCodes.SETTINGS_CHANGE_UNAVAILABLE:
               String errorMessage = "Location settings are inadequate, and cannot be " +
-                "fixed here. Fix in PrefActivity.";
+                "fixed here. Fix in Settings.";
+              Log.e(TAG, errorMessage);
               Toast.makeText(MainActivity.this, errorMessage, Toast.LENGTH_LONG).show();
               mRequestingLocationUpdates = false;
           }
 
-          updateLocationUI();
+          updateUI();
         }
       });
   }
 
   /**
-   * Sets the value of the UI fields for current speed.
+   * Updates all UI fields.
+   */
+  private void updateUI()
+  {
+    setButtonsEnabledState();
+    updateLocationUI();
+  }
+
+  /**
+   * Disables both buttons when functionality is disabled due to insuffucient location settings.
+   * Otherwise ensures that only one button is enabled at any time. The Start Updates button is
+   * enabled if the user is not requesting location updates. The Stop Updates button is enabled
+   * if the user is requesting location updates.
+   */
+  private void setButtonsEnabledState()
+  {
+    if (mRequestingLocationUpdates)
+    {
+      mStartStopButton.setText(R.string.stop_updates);
+
+    } else
+    {
+      mStartStopButton.setText(R.string.start_updates);
+    }
+  }
+
+  /**
+   * Sets the value of the UI fields for the location latitude, longitude and last update time.
    */
   private void updateLocationUI()
   {
     if (mCurrentLocation != null)
     {
 
+      if (mStartAddress.length() < 1)
+      {
+        simpleChronometer.setBase(SystemClock.elapsedRealtime());
+        simpleChronometer.start();
+        getStartData();
+      }
+
       double mSpeed;
       float currentSpeed = mCurrentLocation.getSpeed();
 
-      switch (myPref_type)
+      switch (mPreference)
       {
         case "mph":
           mSpeed = (double) currentSpeed * mph;
@@ -511,26 +579,23 @@ public class MainActivity extends AppCompatActivity
       {
         this.speedArray.add(mSpeed);
       }
-      String speedStr = String.format(Locale.ENGLISH, "%.2f", mSpeed);
+
+      String speedStr = String.format(Locale.getDefault(), "%.2f", mSpeed);
       this.mSpeedTextView.setText(speedStr);
-      myAverageSpeed = calculateAverage(speedArray);
-      this.averageSpeed = String.format(Locale.ENGLISH, "%.2f", myAverageSpeed);
+
     }
+
+    mAddressRequested = true;
   }
 
-  // calculates average speed
-  private double calculateAverage(List<Double> speedList)
+  private void getStartData()
   {
-    double sum = 0;
-    if (!speedList.isEmpty())
-    {
-      for (double speed : speedList)
-      {
-        sum += speed;
-      }
-      return sum / speedList.size();
-    }
-    return sum;
+    mStartTime = utils.getCurrentDateTime();
+    mStartLatitude = mCurrentLocation.getLatitude();
+    mStartLongitude = mCurrentLocation.getLongitude();
+
+    mLastLocation = mCurrentLocation;
+    startIntentService();
   }
 
   /**
@@ -538,9 +603,9 @@ public class MainActivity extends AppCompatActivity
    */
   private void stopLocationUpdates()
   {
-
     if (!mRequestingLocationUpdates)
     {
+      Log.d(TAG, "stopLocationUpdates: updates never requested, no-op.");
       return;
     }
 
@@ -554,7 +619,7 @@ public class MainActivity extends AppCompatActivity
         public void onComplete(@NonNull Task<Void> task)
         {
           mRequestingLocationUpdates = false;
-          mStartStopButton.setText(R.string.start_updates);
+          setButtonsEnabledState();
         }
       });
   }
@@ -573,7 +638,7 @@ public class MainActivity extends AppCompatActivity
       requestPermissions();
     }
 
-    updateLocationUI();
+    updateUI();
   }
 
   @Override
@@ -592,12 +657,136 @@ public class MainActivity extends AppCompatActivity
   {
     savedInstanceState.putBoolean(KEY_REQUESTING_LOCATION_UPDATES, mRequestingLocationUpdates);
     savedInstanceState.putParcelable(KEY_LOCATION, mCurrentLocation);
+    savedInstanceState.putString(KEY_LAST_UPDATED_TIME_STRING, mLastUpdateTime);
     super.onSaveInstanceState(savedInstanceState);
   }
 
+  /**
+   * Creates an intent, adds location data to it as an extra, and starts the intent service for
+   * fetching an address.
+   */
+  private void startIntentService()
+  {
+    // Create an intent for passing to the intent service responsible for fetching the address.
+    Intent intent = new Intent(this, FetchAddressIntentService.class);
 
-  // PERMISSIONS
+    // Pass the result receiver as an extra to the service.
+    intent.putExtra(Constants.RECEIVER, mResultReceiver);
 
+    // Pass the location data as an extra to the service.
+    intent.putExtra(Constants.LOCATION_DATA_EXTRA, mLastLocation);
+
+    // Start the service. If the service isn't already running, it is instantiated and started
+    // (creating a process for it if needed); if it is running then it remains running. The
+    // service kills itself automatically once all intents are processed.
+    startService(intent);
+  }
+
+  /**
+   * Gets the address for the last known location.
+   */
+  @SuppressWarnings("MissingPermission")
+  private void getAddress()
+  {
+    mFusedLocationClient.getLastLocation()
+      .addOnSuccessListener(this, new OnSuccessListener<Location>()
+      {
+        @Override
+        public void onSuccess(Location location)
+        {
+          if (location == null)
+          {
+            Log.w(TAG, "onSuccess:null");
+            return;
+          }
+
+          mLastLocation = location;
+
+          // Determine whether a Geocoder is available.
+          if (!Geocoder.isPresent())
+          {
+            showSnackbar(getString(R.string.no_geocoder_available));
+            return;
+          }
+
+          // If the user pressed the fetch address button before we had the location,
+          // this will be set to true indicating that we should kick off the intent
+          // service after fetching the location.
+          if (mAddressRequested)
+          {
+            startIntentService();
+          }
+        }
+      })
+      .addOnFailureListener(this, new OnFailureListener()
+      {
+        @Override
+        public void onFailure(@NonNull Exception e)
+        {
+          Log.w(TAG, "getLastLocation:onFailure", e);
+        }
+      });
+  }
+
+  /**
+   * Receiver for data sent from FetchAddressIntentService.
+   */
+  private class AddressResultReceiver extends ResultReceiver
+  {
+    AddressResultReceiver(Handler handler)
+    {
+      super(handler);
+    }
+
+    /**
+     * Receives data sent from FetchAddressIntentService and updates the UI in MainActivity.
+     */
+    @Override
+    protected void onReceiveResult(int resultCode, Bundle resultData)
+    {
+
+      // Display the address string or an error message sent from the intent service.
+      mAddressOutput = resultData.getString(Constants.RESULT_DATA_KEY);
+
+      // If an address was found....
+      if (resultCode == Constants.SUCCESS_RESULT)
+      {
+
+        if (mStartAddress.length() < 1)
+        {
+          mStartAddress = mAddressOutput;
+        } else
+        {
+
+          mStopAddress = mAddressOutput;
+          simpleChronometer.stop();
+          stopLocationUpdates();
+          setButtonsEnabledState();
+          passData();
+        }
+
+      }
+
+      // Reset. Enable the Fetch Address button and stop showing the progress bar.
+      mAddressRequested = false;
+      //updateUIWidgets();
+    }
+  }
+
+
+  /**
+   * Shows a {@link Snackbar} using {@code text}.
+   *
+   * @param text The Snackbar text.
+   */
+  private void showSnackbar(final String text)
+  {
+    View container = findViewById(android.R.id.content);
+    if (container != null)
+    {
+      Snackbar.make(container, text, Snackbar.LENGTH_LONG).show();
+    }
+  }
 
   /**
    * Shows a {@link Snackbar}.
@@ -609,8 +798,7 @@ public class MainActivity extends AppCompatActivity
   private void showSnackbar(final int mainTextStringId, final int actionStringId,
                             View.OnClickListener listener)
   {
-    Snackbar.make(
-      findViewById(android.R.id.content),
+    Snackbar.make(findViewById(android.R.id.content),
       getString(mainTextStringId),
       Snackbar.LENGTH_INDEFINITE)
       .setAction(getString(actionStringId), listener).show();
@@ -636,8 +824,10 @@ public class MainActivity extends AppCompatActivity
     // request previously, but didn't check the "Don't ask again" checkbox.
     if (shouldProvideRationale)
     {
-      showSnackbar(R.string.permission_rationale,
-        android.R.string.ok, new View.OnClickListener()
+      Log.i(TAG, "Displaying permission rationale to provide additional context.");
+
+      showSnackbar(R.string.permission_rationale, android.R.string.ok,
+        new View.OnClickListener()
         {
           @Override
           public void onClick(View view)
@@ -648,8 +838,10 @@ public class MainActivity extends AppCompatActivity
               REQUEST_PERMISSIONS_REQUEST_CODE);
           }
         });
+
     } else
     {
+      Log.i(TAG, "Requesting permission");
       // Request permission. It's possible this can be auto answered if device policy
       // sets the permission in a given state or the user denied the permission
       // previously and checked "Never ask again".
@@ -666,18 +858,18 @@ public class MainActivity extends AppCompatActivity
   public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
                                          @NonNull int[] grantResults)
   {
+    Log.i(TAG, "onRequestPermissionResult");
     if (requestCode == REQUEST_PERMISSIONS_REQUEST_CODE)
     {
       if (grantResults.length <= 0)
       {
         // If user interaction was interrupted, the permission request is cancelled and you
         // receive empty arrays.
+        Log.i(TAG, "User interaction was cancelled.");
       } else if (grantResults[0] == PackageManager.PERMISSION_GRANTED)
       {
-        if (mRequestingLocationUpdates)
-        {
-          startLocationUpdates();
-        }
+        // Permission granted.
+        getAddress();
       } else
       {
         // Permission denied.
@@ -691,8 +883,8 @@ public class MainActivity extends AppCompatActivity
         // again" prompts). Therefore, a user interface affordance is typically implemented
         // when permissions are denied. Otherwise, your app could appear unresponsive to
         // touches or interactions which have required permissions.
-        showSnackbar(R.string.permission_denied_explanation,
-          R.string.settings, new View.OnClickListener()
+        showSnackbar(R.string.permission_denied_explanation, R.string.settings,
+          new View.OnClickListener()
           {
             @Override
             public void onClick(View view)
@@ -710,6 +902,33 @@ public class MainActivity extends AppCompatActivity
           });
       }
     }
+  }
+
+
+  public void passData()
+  {
+    // get average from array
+//    double temp = utils.calculateAverage(speedArray);
+//    String mAverageSpeed = String.format(Locale.ENGLISH, "%.2f", temp);
+
+
+    HashMap<String, String> hashMap = new HashMap<>();
+    hashMap.put("start_time", mStartTime);
+    hashMap.put("start_address", mStartAddress);
+    hashMap.put("start_lat", String.valueOf(mStartLatitude));
+    hashMap.put("start_lng", String.valueOf(mStartLongitude));
+
+    hashMap.put("stop_time", mStopTime);
+    hashMap.put("stop_address", mStopAddress);
+    hashMap.put("stop_lat", String.valueOf(mStopLatitude));
+    hashMap.put("stop_lng", String.valueOf(mStopLongitude));
+
+    hashMap.put("avg_speed", String.valueOf(utils.calculateAverage(speedArray)));
+    hashMap.put("max_speed", String.valueOf(topSpeed));
+
+    Intent intent = new Intent(this, TripResult.class);
+    intent.putExtra("map", hashMap);
+    startActivity(intent);
   }
 
 }
