@@ -7,13 +7,11 @@ import android.content.IntentSender;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Typeface;
-import android.location.Geocoder;
 import android.location.Location;
 import android.net.Uri;
+import android.os.AsyncTask;
 import android.os.Bundle;
-import android.os.Handler;
 import android.os.Looper;
-import android.os.ResultReceiver;
 import android.os.SystemClock;
 import android.provider.Settings;
 import android.support.annotation.NonNull;
@@ -45,6 +43,10 @@ import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.text.DateFormat;
 import java.util.ArrayList;
@@ -139,30 +141,6 @@ public class MainActivity extends AppCompatActivity
    */
   private Boolean mRequestingLocationUpdates;
 
-  private static final String ADDRESS_REQUESTED_KEY = "address-request-pending";
-  private static final String LOCATION_ADDRESS_KEY = "location-address";
-
-
-  /**
-   * Represents a geographical location.
-   */
-  private Location mLastLocation;
-
-  /**
-   * Tracks whether the user has requested an address. Becomes true when the user requests an
-   * address and false when the address (or an error message) is delivered.
-   */
-  private boolean mAddressRequested;
-
-  /**
-   * The formatted location address.
-   */
-  private String mAddressOutput;
-
-  /**
-   * Receiver registered with this activity to get the response from FetchAddressIntentService.
-   */
-  private AddressResultReceiver mResultReceiver;
 
   /**
    * Time when the location was updated represented as a String.
@@ -171,19 +149,26 @@ public class MainActivity extends AppCompatActivity
 
   //
 
-  private String mStartAddress = "", mStopAddress = "";
+  private String mStartAddress = "";
   private double mStartLatitude, mStartLongitude, mStopLatitude, mStopLongitude;
 
   private String mStartTime, mStopTime;
 
-  private String mPreference;
+  private String mPreference, mTotalTime;
 
-  private  static final double mph = 2.23694;
-  private  static final double kph = 3.6;
+  private static final double mph = 2.23694;
+  private static final double kph = 3.6;
 
   private double topSpeed = 0;
 
   private List<Double> speedArray = new ArrayList<>();
+
+
+  String startAddess="", endAddress="";
+
+
+  // http://maps.googleapis.com/maps/api/geocode/json?latlng=
+  private static String url;
 
   @Override
   public void onCreate(Bundle savedInstanceState)
@@ -207,18 +192,15 @@ public class MainActivity extends AppCompatActivity
     SharedPreferences pref = getApplicationContext().getSharedPreferences("speedPref", MODE_PRIVATE);
     mPreference = pref.getString("pref_type", null);
 
+    Log.w("mPreference ", "" + mPreference);
+
     if (this.mPreference != null)
     {
       mSpeedTypeTextView.setText(mPreference);
-    }
-    else
+    } else
     {
       this.mPreference = "miles";
     }
-
-    mResultReceiver = new AddressResultReceiver(new Handler());
-    mAddressRequested = false;
-    mAddressOutput = "";
 
     // keep sceen on
     getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -231,6 +213,9 @@ public class MainActivity extends AppCompatActivity
       public void onClick(View v)
       {
         String buttonText = mStartStopButton.getText().toString();
+
+       //   54.2936641, -7.0886426
+
 
         if (buttonText.equalsIgnoreCase("Start"))
         {
@@ -293,17 +278,6 @@ public class MainActivity extends AppCompatActivity
   {
     if (savedInstanceState != null)
     {
-      // Check savedInstanceState to see if the address was previously requested.
-      if (savedInstanceState.keySet().contains(ADDRESS_REQUESTED_KEY))
-      {
-        mAddressRequested = savedInstanceState.getBoolean(ADDRESS_REQUESTED_KEY);
-      }
-      // Check savedInstanceState to see if the location address string was previously found
-      // and stored in the Bundle. If it was found, display the address string in the UI.
-      if (savedInstanceState.keySet().contains(LOCATION_ADDRESS_KEY))
-      {
-        mAddressOutput = savedInstanceState.getString(LOCATION_ADDRESS_KEY);
-      }
       // Update the value of mRequestingLocationUpdates from the Bundle, and make sure that
       // the Start Updates and Stop Updates buttons are correctly enabled or disabled.
       if (savedInstanceState.keySet().contains(KEY_REQUESTING_LOCATION_UPDATES))
@@ -437,8 +411,8 @@ public class MainActivity extends AppCompatActivity
     mStopLatitude = mCurrentLocation.getLatitude();
     mStopLongitude = mCurrentLocation.getLongitude();
 
-    mLastLocation = mCurrentLocation;
-    startIntentService();
+    url = "http://maps.googleapis.com/maps/api/geocode/json?latlng="+ mStopLatitude + "," + mStopLongitude;
+    new GetApiData().execute();
   }
 
   /**
@@ -518,8 +492,7 @@ public class MainActivity extends AppCompatActivity
     if (mRequestingLocationUpdates)
     {
       mStartStopButton.setText(R.string.stop_updates);
-    }
-    else
+    } else
     {
       mStartStopButton.setText(R.string.start_updates);
     }
@@ -567,8 +540,6 @@ public class MainActivity extends AppCompatActivity
       String speedStr = String.format(Locale.getDefault(), "%.2f", mSpeed);
       this.mSpeedTextView.setText(speedStr);
     }
-
-    mAddressRequested = true;
   }
 
   private void getStartData()
@@ -577,8 +548,9 @@ public class MainActivity extends AppCompatActivity
     mStartLatitude = mCurrentLocation.getLatitude();
     mStartLongitude = mCurrentLocation.getLongitude();
 
-    mLastLocation = mCurrentLocation;
-    startIntentService();
+    url = "http://maps.googleapis.com/maps/api/geocode/json?latlng="+ mStartLatitude + "," + mStopLongitude;
+
+    new GetApiData().execute();
   }
 
   /**
@@ -616,8 +588,7 @@ public class MainActivity extends AppCompatActivity
     if (mRequestingLocationUpdates && checkPermissions())
     {
       startLocationUpdates();
-    }
-    else if (!checkPermissions())
+    } else if (!checkPermissions())
     {
       requestPermissions();
     }
@@ -645,130 +616,6 @@ public class MainActivity extends AppCompatActivity
     super.onSaveInstanceState(savedInstanceState);
   }
 
-  /**
-   * Creates an intent, adds location data to it as an extra, and starts the intent service for
-   * fetching an address.
-   */
-  private void startIntentService()
-  {
-    // Create an intent for passing to the intent service responsible for fetching the address.
-    Intent intent = new Intent(this, FetchAddressIntentService.class);
-
-    // Pass the result receiver as an extra to the service.
-    intent.putExtra(Constants.RECEIVER, mResultReceiver);
-
-    // Pass the location data as an extra to the service.
-    intent.putExtra(Constants.LOCATION_DATA_EXTRA, mLastLocation);
-
-    // Start the service. If the service isn't already running, it is instantiated and started
-    // (creating a process for it if needed); if it is running then it remains running. The
-    // service kills itself automatically once all intents are processed.
-    startService(intent);
-  }
-
-  /**
-   * Gets the address for the last known location.
-   */
-  @SuppressWarnings("MissingPermission")
-  private void getAddress()
-  {
-    mFusedLocationClient.getLastLocation()
-      .addOnSuccessListener(this, new OnSuccessListener<Location>()
-      {
-        @Override
-        public void onSuccess(Location location)
-        {
-          if (location == null)
-          {
-            Log.w(TAG, "onSuccess:null");
-            return;
-          }
-
-          mLastLocation = location;
-
-          // Determine whether a Geocoder is available.
-          if (!Geocoder.isPresent())
-          {
-            showSnackbar(getString(R.string.no_geocoder_available));
-            return;
-          }
-
-          // If the user pressed the fetch address button before we had the location,
-          // this will be set to true indicating that we should kick off the intent
-          // service after fetching the location.
-          if (mAddressRequested)
-          {
-            startIntentService();
-          }
-        }
-      })
-      .addOnFailureListener(this, new OnFailureListener()
-      {
-        @Override
-        public void onFailure(@NonNull Exception e)
-        {
-          Log.w(TAG, "getLastLocation:onFailure", e);
-        }
-      });
-  }
-
-  /**
-   * Receiver for data sent from FetchAddressIntentService.
-   */
-  private class AddressResultReceiver extends ResultReceiver
-  {
-    AddressResultReceiver(Handler handler)
-    {
-      super(handler);
-    }
-
-    /**
-     * Receives data sent from FetchAddressIntentService.
-     */
-    @Override
-    protected void onReceiveResult(int resultCode, Bundle resultData)
-    {
-
-      // Display the address string or an error message sent from the intent service.
-      mAddressOutput = resultData.getString(Constants.RESULT_DATA_KEY);
-
-      // If an address was found....
-      if (resultCode == Constants.SUCCESS_RESULT)
-      {
-
-        if (mStartAddress.length() < 1)
-        {
-          mStartAddress = mAddressOutput;
-        }
-        else
-        {
-          mStopAddress = mAddressOutput;
-          simpleChronometer.stop();
-          stopLocationUpdates();
-          setButtonsEnabledState();
-          passData();
-        }
-      }
-
-      // Reset. Enable the Fetch Address button and stop showing the progress bar.
-      mAddressRequested = false;
-    }
-  }
-
-
-  /**
-   * Shows a {@link Snackbar} using {@code text}.
-   *
-   * @param text The Snackbar text.
-   */
-  private void showSnackbar(final String text)
-  {
-    View container = findViewById(android.R.id.content);
-    if (container != null)
-    {
-      Snackbar.make(container, text, Snackbar.LENGTH_LONG).show();
-    }
-  }
 
   /**
    * Shows a {@link Snackbar}.
@@ -851,7 +698,6 @@ public class MainActivity extends AppCompatActivity
       } else if (grantResults[0] == PackageManager.PERMISSION_GRANTED)
       {
         // Permission granted.
-        getAddress();
       } else
       {
         // Permission denied.
@@ -887,26 +733,132 @@ public class MainActivity extends AppCompatActivity
   }
 
 
+//  public void passData()
+//  {
+//    HashMap<String, String> hashMap = new HashMap<>();
+//
+//    hashMap.put("start_time", mStartTime);
+//    hashMap.put("start_address", mStartAddress);
+//    hashMap.put("start_lat", String.valueOf(mStartLatitude));
+//    hashMap.put("start_lng", String.valueOf(mStartLongitude));
+//
+//    hashMap.put("stop_time", mStopTime);
+//    String mStopAddress = "";
+//    hashMap.put("stop_address", mStopAddress);
+//    hashMap.put("stop_lat", String.valueOf(mStopLatitude));
+//    hashMap.put("stop_lng", String.valueOf(mStopLongitude));
+//
+//    hashMap.put("total_time", mTotalTime);
+//
+//    double mAverage = utils.calculateAverage(speedArray);
+//    String avgSpeed = String.format(Locale.getDefault(), "%.2f", mAverage);
+//    hashMap.put("avg_speed", avgSpeed);
+//
+//    String maxSpeed = String.format(Locale.getDefault(), "%.2f", topSpeed);
+//    hashMap.put("max_speed", String.valueOf(maxSpeed));
+//
+//    Intent intent = new Intent(this, TripResult.class);
+//    intent.putExtra("map", hashMap);
+//    startActivity(intent);
+//  }
+
+  ////////////////////////////////   test
+
+  /**
+   * Async task class to get json by making HTTP call
+   */
+  private class GetApiData extends AsyncTask<Void, Void, Void>
+  {
+
+//    @Override
+//    protected void onPreExecute()
+//    {
+//      super.onPreExecute();
+//    }
+
+    @Override
+    protected Void doInBackground(Void... arg0)
+    {
+      HttpHandler sh = new HttpHandler();
+
+      // Making a request to url and getting response
+      String jsonStr = sh.makeServiceCall(url);
+
+      if (jsonStr != null)
+      {
+        try
+        {
+          JSONObject jsonObj = new JSONObject(jsonStr);
+
+          // Getting JSON Array node
+          JSONArray locationData = jsonObj.getJSONArray("results");
+
+          // looping through all data
+          for (int i = 0; i < locationData.length(); i++)
+          {
+            JSONObject c = locationData.getJSONObject(1);
+
+            String foundAddress = c.getString("formatted_address");
+            if(startAddess.equals(""))
+            {
+              startAddess = foundAddress;
+            }
+            else
+            {
+              endAddress = foundAddress;
+            }
+            Log.w("xxxxxx",""+foundAddress);
+          }
+        }
+        catch (final JSONException e)
+        {
+          Log.e(TAG, "Json parsing error: " + e.getMessage());
+        }
+      } else
+      {
+        Log.e(TAG, "Couldn't get json from server.");
+      }
+
+      return null;
+    }
+
+    @Override
+    protected void onPostExecute(Void result)
+    {
+      super.onPostExecute(result);
+
+      passData();
+    }
+
+    }
+
   public void passData()
   {
-    HashMap<String, String> hashMap = new HashMap<>();
+    HashMap<Object, Object> hashMap = new HashMap<>();
 
     hashMap.put("start_time", mStartTime);
     hashMap.put("start_address", mStartAddress);
-    hashMap.put("start_lat", String.valueOf(mStartLatitude));
-    hashMap.put("start_lng", String.valueOf(mStartLongitude));
+    hashMap.put("start_lat", mStartLatitude);
+    hashMap.put("start_lng", mStartLongitude);
 
     hashMap.put("stop_time", mStopTime);
-    hashMap.put("stop_address", mStopAddress);
-    hashMap.put("stop_lat", String.valueOf(mStopLatitude));
-    hashMap.put("stop_lng", String.valueOf(mStopLongitude));
+    hashMap.put("stop_address", endAddress);
+    hashMap.put("stop_lat", mStopLatitude);
+    hashMap.put("stop_lng", mStopLongitude);
 
-    hashMap.put("avg_speed", String.valueOf(utils.calculateAverage(speedArray)));
-    hashMap.put("max_speed", String.valueOf(topSpeed));
+    hashMap.put("total_time", mTotalTime);
+
+    double mAverage = utils.calculateAverage(speedArray);
+    String avgSpeed = String.format(Locale.getDefault(), "%.2f", mAverage);
+    hashMap.put("avg_speed", avgSpeed);
+
+    String maxSpeed = String.format(Locale.getDefault(), "%.2f", topSpeed);
+    hashMap.put("max_speed", maxSpeed);
 
     Intent intent = new Intent(this, TripResult.class);
     intent.putExtra("map", hashMap);
     startActivity(intent);
   }
 
-}
+  }
+

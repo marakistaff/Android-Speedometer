@@ -15,7 +15,7 @@ public class PrefActivity extends AppCompatActivity
     super.onCreate(savedInstanceState);
     setContentView(R.layout.activity_pref);
 
-    //Reading from SharedPreferences
+    //Reading from SharedPreferences - gets which preference type
     SharedPreferences pref = getApplicationContext().getSharedPreferences("speedPref", MODE_PRIVATE);
     String myPref_type = pref.getString("pref_type", null);
 
@@ -70,10 +70,12 @@ public class PrefActivity extends AppCompatActivity
         RadioButton rad1 = (RadioButton) findViewById(R.id.radioButton1);
         rad1.setChecked(true);
         break;
+
       case "mph":
         RadioButton rad2 = (RadioButton) findViewById(R.id.radioButton2);
         rad2.setChecked(true);
         break;
+
       default:
         RadioButton rad3 = (RadioButton) findViewById(R.id.radioButton3);
         rad3.setChecked(true);

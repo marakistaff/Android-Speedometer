@@ -1,15 +1,14 @@
 package android.google.com.androidspeedometer;
 
 /**
- * Constant values reused in this sample.
+ * Constant values.
  */
 final class Constants {
   static final int SUCCESS_RESULT = 0;
 
   static final int FAILURE_RESULT = 1;
 
-  private static final String PACKAGE_NAME =
-    "xxxxx";
+  private static final String PACKAGE_NAME = "android.google.com.androidspeedometer";
 
   static final String RECEIVER = PACKAGE_NAME + ".RECEIVER";
 

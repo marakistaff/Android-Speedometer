@@ -3,8 +3,6 @@ package android.google.com.androidspeedometer;
 
 import android.location.Location;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.List;
@@ -12,27 +10,8 @@ import java.util.Locale;
 
 class utils
 {
-
-  /**
-   * Round double to n decimal places
-   *
-   * @param value - decimal value
-   * @param places - number of decimal places
-   * @return - formatted double
-   */
-  static double round(double value, int places)
-  {
-    if (places < 0) throw new IllegalArgumentException();
-
-    BigDecimal bd = new BigDecimal(value);
-    bd = bd.setScale(places, RoundingMode.HALF_UP);
-    return bd.doubleValue();
-  }
-
-
   /**
    * Gets the current date and time
-   *
    * @return - formatted String date
    */
   static String getCurrentDateTime()
@@ -43,6 +22,7 @@ class utils
     return df.format(c.getTime());
   }
 
+  // returns 'float' distance IN METERS from point A to point B
   static float getDistance(double latitudePointA, double longitudePointA, double latitudePointB, double longitudePointB)
   {
     Location locationA = new Location("point A");
