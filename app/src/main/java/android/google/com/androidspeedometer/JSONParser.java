@@ -18,7 +18,7 @@ class JSONParser
 
   private HttpURLConnection conn;
   private StringBuilder result;
-  private JSONObject jObj = null;
+  private JSONObject jObject = null;
 
 
   JSONObject makeHttpRequest(String url)
@@ -44,7 +44,7 @@ class JSONParser
 
     try
     {
-      //Receive the response from the server
+      //Server response
       InputStream in = new BufferedInputStream(conn.getInputStream());
       BufferedReader reader = new BufferedReader(new InputStreamReader(in));
       result = new StringBuilder();
@@ -53,9 +53,6 @@ class JSONParser
       {
         result.append(line);
       }
-
-      //Log.d("JSON Parser", "result: " + result.toString());
-
     } catch (IOException e)
     {
       e.printStackTrace();
@@ -63,16 +60,16 @@ class JSONParser
 
     conn.disconnect();
 
-    // try parse the string to a JSON object
+    // try to parse to a JSON object
     try
     {
-      jObj = new JSONObject(result.toString());
+      jObject = new JSONObject(result.toString());
     } catch (JSONException e)
     {
       Log.e("JSON Parser", "Error parsing data " + e.toString());
     }
 
-    // return JSON Object
-    return jObj;
+    // Return JSON Object
+    return jObject;
   }
 }

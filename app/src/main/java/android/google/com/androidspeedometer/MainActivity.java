@@ -17,6 +17,9 @@ import android.support.design.widget.Snackbar;
 import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
@@ -156,13 +159,9 @@ public class MainActivity extends AppCompatActivity
   //
   private List<Double> speedArray = new ArrayList<>();
 
-  String startTime;
-  String startLatitude;
-  String startLongitude;
+  String startTime, startLatitude, startLongitude;
 
-  String stopTime;
-  String stopLatitude;
-  String stopLongitude;
+  String stopTime, stopLatitude, stopLongitude;
 
   @Override
   public void onCreate(Bundle savedInstanceState)
@@ -232,6 +231,23 @@ public class MainActivity extends AppCompatActivity
     createLocationCallback();
     createLocationRequest();
     buildLocationSettingsRequest();
+  }
+
+  @Override
+  public boolean onCreateOptionsMenu(Menu menu) {
+    MenuInflater inflater = getMenuInflater();
+    inflater.inflate(R.menu.menu_main, menu);
+    return true;
+  }
+
+  @Override
+  public boolean onOptionsItemSelected(MenuItem item) {
+    // Handle item selection
+    Intent intent = new Intent(this, PrefActivity.class);
+    startActivity(intent);
+
+    return super.onOptionsItemSelected(item);
+
   }
 
   /**
