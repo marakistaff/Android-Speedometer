@@ -9,22 +9,17 @@ import android.content.pm.PackageManager;
 import android.graphics.Typeface;
 import android.location.Location;
 import android.net.Uri;
-import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Looper;
-import android.os.SystemClock;
 import android.provider.Settings;
 import android.support.annotation.NonNull;
 import android.support.design.widget.Snackbar;
 import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
-import android.view.Menu;
-import android.view.MenuItem;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
-import android.widget.Chronometer;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -44,12 +39,9 @@ import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
 
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
-
 import java.text.DateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
@@ -66,6 +58,9 @@ import java.util.Locale;
  * off. The {@code SettingsApi} makes it possible to determine if a device's system settings are
  * adequate for the location request, and to optionally invoke a dialog that allows the user to
  * enable the necessary settings.
+ * <p/>
+ * This sample allows the user to request location updates using the ACCESS_FINE_LOCATION setting
+ * (as specified in AndroidManifest.xml).
  */
 public class MainActivity extends AppCompatActivity
 {
@@ -85,7 +80,7 @@ public class MainActivity extends AppCompatActivity
   /**
    * The desired interval for location updates. Inexact. Updates may be more or less frequent.
    */
-  private static final long UPDATE_INTERVAL_IN_MILLISECONDS = 6000;
+  private static final long UPDATE_INTERVAL_IN_MILLISECONDS = 10000;
 
   /**
    * The fastest rate for active location updates. Exact. Updates will never be more frequent
@@ -131,9 +126,8 @@ public class MainActivity extends AppCompatActivity
   private Location mCurrentLocation;
 
   // UI Widgets.
-  private Button mStartStopButton;
-  private TextView mSpeedTextView;
-  private Chronometer simpleChronometer;
+  Button mStartStopButton;
+  TextView mSpeedTextView;
 
   /**
    * Tracks the status of the location updates request. Value changes when the user presses the
@@ -141,34 +135,34 @@ public class MainActivity extends AppCompatActivity
    */
   private Boolean mRequestingLocationUpdates;
 
-
   /**
    * Time when the location was updated represented as a String.
    */
   private String mLastUpdateTime;
 
   //
+  ArrayList<String> locationList;
 
-  private String mStartAddress = "";
-  private double mStartLatitude, mStartLongitude, mStopLatitude, mStopLongitude;
+  //
+  private String mPreference;
 
-  private String mStartTime, mStopTime;
-
-  private String mPreference, mTotalTime;
-
+  //
   private static final double mph = 2.23694;
   private static final double kph = 3.6;
 
-  private double topSpeed = 0;
+  //
+  double topSpeed;
 
+  //
   private List<Double> speedArray = new ArrayList<>();
 
+  String startTime;
+  String startLatitude;
+  String startLongitude;
 
-  String startAddess="", endAddress="";
-
-
-  // http://maps.googleapis.com/maps/api/geocode/json?latlng=
-  private static String url;
+  String stopTime;
+  String stopLatitude;
+  String stopLongitude;
 
   @Override
   public void onCreate(Bundle savedInstanceState)
@@ -176,17 +170,39 @@ public class MainActivity extends AppCompatActivity
     super.onCreate(savedInstanceState);
     setContentView(R.layout.activity_main);
 
+    // keep sceen on
+    getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
+    locationList = new ArrayList<>();
+
     // custom font
     Typeface custom_font = Typeface.createFromAsset(getAssets(), "fonts/myfont.ttf");
 
     // Locate the UI widgets.
+    mStartStopButton = (Button) findViewById(R.id.start_updates_button);
     mSpeedTextView = (TextView) findViewById(R.id.speed_text);
     mSpeedTextView.setTypeface(custom_font);
     TextView mSpeedTypeTextView = (TextView) findViewById(R.id.speedTypeTextView);
     mSpeedTypeTextView.setTypeface(custom_font);
-    simpleChronometer = (Chronometer) findViewById(R.id.simpleChronometer);
-    simpleChronometer.setTypeface(custom_font);
-    mStartStopButton = (Button) findViewById(R.id.start_updates_button);
+
+    // Add button listener
+    mStartStopButton.setOnClickListener(new View.OnClickListener()
+    {
+      @Override
+      public void onClick(View v)
+      {
+        String buttonText = mStartStopButton.getText().toString();
+
+        if (buttonText.equalsIgnoreCase("START"))
+        {
+          speedArray.clear();
+          startUpdatesButtonHandler(v);
+        } else
+        {
+          stopUpdatesButtonHandler(v);
+        }
+      }
+    });
 
     //Reading from SharedPreferences
     SharedPreferences pref = getApplicationContext().getSharedPreferences("speedPref", MODE_PRIVATE);
@@ -202,33 +218,6 @@ public class MainActivity extends AppCompatActivity
       this.mPreference = "miles";
     }
 
-    // keep sceen on
-    getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-
-
-    // Add button listener
-    this.mStartStopButton.setOnClickListener(new View.OnClickListener()
-    {
-      @Override
-      public void onClick(View v)
-      {
-        String buttonText = mStartStopButton.getText().toString();
-
-       //   54.2936641, -7.0886426
-
-
-        if (buttonText.equalsIgnoreCase("Start"))
-        {
-          startUpdatesButtonHandler(v);
-        }
-        else
-        {
-          stopUpdatesButtonHandler(v);
-        }
-      }
-    });
-
-
     mRequestingLocationUpdates = false;
     mLastUpdateTime = "";
 
@@ -243,30 +232,6 @@ public class MainActivity extends AppCompatActivity
     createLocationCallback();
     createLocationRequest();
     buildLocationSettingsRequest();
-  }
-
-  @Override
-  public boolean onCreateOptionsMenu(Menu menu)
-  {
-    getMenuInflater().inflate(R.menu.menu_main, menu);
-    return true;
-  }
-
-  // overflow menu
-  @Override
-  public boolean onOptionsItemSelected(MenuItem item)
-  {
-    int id = item.getItemId();
-    // Handle item selection - opens PrefActivity
-    if (id == R.id.settings)
-    {
-      Intent intent = new Intent(this, PrefActivity.class);
-      this.startActivity(intent);
-
-      return true;
-    }
-
-    return super.onOptionsItemSelected(item);
   }
 
   /**
@@ -407,12 +372,11 @@ public class MainActivity extends AppCompatActivity
    */
   public void stopUpdatesButtonHandler(View view)
   {
-    mStopTime = utils.getCurrentDateTime();
-    mStopLatitude = mCurrentLocation.getLatitude();
-    mStopLongitude = mCurrentLocation.getLongitude();
-
-    url = "http://maps.googleapis.com/maps/api/geocode/json?latlng="+ mStopLatitude + "," + mStopLongitude;
-    new GetApiData().execute();
+    // It is a good practice to remove location requests when the activity is in a paused or
+    // stopped state. Doing so helps battery performance and is especially
+    // recommended in applications that request frequent location updates.
+    stopLocationUpdates();
+    getResults();
   }
 
   /**
@@ -505,12 +469,10 @@ public class MainActivity extends AppCompatActivity
   {
     if (mCurrentLocation != null)
     {
-      if (mStartAddress.length() < 1)
-      {
-        simpleChronometer.setBase(SystemClock.elapsedRealtime());
-        simpleChronometer.start();
-        getStartData();
-      }
+      String currTime = utils.getCurrentDateTime();
+      String xx = currTime + "," + mCurrentLocation.getLatitude() + "," + mCurrentLocation.getLongitude();
+
+      locationList.add(xx);
 
       double mSpeed;
       float currentSpeed = mCurrentLocation.getSpeed();
@@ -539,18 +501,8 @@ public class MainActivity extends AppCompatActivity
 
       String speedStr = String.format(Locale.getDefault(), "%.2f", mSpeed);
       this.mSpeedTextView.setText(speedStr);
+
     }
-  }
-
-  private void getStartData()
-  {
-    mStartTime = utils.getCurrentDateTime();
-    mStartLatitude = mCurrentLocation.getLatitude();
-    mStartLongitude = mCurrentLocation.getLongitude();
-
-    url = "http://maps.googleapis.com/maps/api/geocode/json?latlng="+ mStartLatitude + "," + mStopLongitude;
-
-    new GetApiData().execute();
   }
 
   /**
@@ -577,7 +529,10 @@ public class MainActivity extends AppCompatActivity
           setButtonsEnabledState();
         }
       });
+
+    //getResults();
   }
+
 
   @Override
   public void onResume()
@@ -616,7 +571,6 @@ public class MainActivity extends AppCompatActivity
     super.onSaveInstanceState(savedInstanceState);
   }
 
-
   /**
    * Shows a {@link Snackbar}.
    *
@@ -627,7 +581,8 @@ public class MainActivity extends AppCompatActivity
   private void showSnackbar(final int mainTextStringId, final int actionStringId,
                             View.OnClickListener listener)
   {
-    Snackbar.make(findViewById(android.R.id.content),
+    Snackbar.make(
+      findViewById(android.R.id.content),
       getString(mainTextStringId),
       Snackbar.LENGTH_INDEFINITE)
       .setAction(getString(actionStringId), listener).show();
@@ -654,9 +609,8 @@ public class MainActivity extends AppCompatActivity
     if (shouldProvideRationale)
     {
       Log.i(TAG, "Displaying permission rationale to provide additional context.");
-
-      showSnackbar(R.string.permission_rationale, android.R.string.ok,
-        new View.OnClickListener()
+      showSnackbar(R.string.permission_rationale,
+        android.R.string.ok, new View.OnClickListener()
         {
           @Override
           public void onClick(View view)
@@ -667,7 +621,6 @@ public class MainActivity extends AppCompatActivity
               REQUEST_PERMISSIONS_REQUEST_CODE);
           }
         });
-
     } else
     {
       Log.i(TAG, "Requesting permission");
@@ -697,7 +650,11 @@ public class MainActivity extends AppCompatActivity
         Log.i(TAG, "User interaction was cancelled.");
       } else if (grantResults[0] == PackageManager.PERMISSION_GRANTED)
       {
-        // Permission granted.
+        if (mRequestingLocationUpdates)
+        {
+          Log.i(TAG, "Permission granted, updates requested, starting location updates");
+          startLocationUpdates();
+        }
       } else
       {
         // Permission denied.
@@ -711,8 +668,8 @@ public class MainActivity extends AppCompatActivity
         // again" prompts). Therefore, a user interface affordance is typically implemented
         // when permissions are denied. Otherwise, your app could appear unresponsive to
         // touches or interactions which have required permissions.
-        showSnackbar(R.string.permission_denied_explanation, R.string.settings,
-          new View.OnClickListener()
+        showSnackbar(R.string.permission_denied_explanation,
+          R.string.settings, new View.OnClickListener()
           {
             @Override
             public void onClick(View view)
@@ -732,133 +689,53 @@ public class MainActivity extends AppCompatActivity
     }
   }
 
-
-//  public void passData()
-//  {
-//    HashMap<String, String> hashMap = new HashMap<>();
-//
-//    hashMap.put("start_time", mStartTime);
-//    hashMap.put("start_address", mStartAddress);
-//    hashMap.put("start_lat", String.valueOf(mStartLatitude));
-//    hashMap.put("start_lng", String.valueOf(mStartLongitude));
-//
-//    hashMap.put("stop_time", mStopTime);
-//    String mStopAddress = "";
-//    hashMap.put("stop_address", mStopAddress);
-//    hashMap.put("stop_lat", String.valueOf(mStopLatitude));
-//    hashMap.put("stop_lng", String.valueOf(mStopLongitude));
-//
-//    hashMap.put("total_time", mTotalTime);
-//
-//    double mAverage = utils.calculateAverage(speedArray);
-//    String avgSpeed = String.format(Locale.getDefault(), "%.2f", mAverage);
-//    hashMap.put("avg_speed", avgSpeed);
-//
-//    String maxSpeed = String.format(Locale.getDefault(), "%.2f", topSpeed);
-//    hashMap.put("max_speed", String.valueOf(maxSpeed));
-//
-//    Intent intent = new Intent(this, TripResult.class);
-//    intent.putExtra("map", hashMap);
-//    startActivity(intent);
-//  }
-
-  ////////////////////////////////   test
-
-  /**
-   * Async task class to get json by making HTTP call
-   */
-  private class GetApiData extends AsyncTask<Void, Void, Void>
+  public void getResults()
   {
 
-//    @Override
-//    protected void onPreExecute()
-//    {
-//      super.onPreExecute();
-//    }
-
-    @Override
-    protected Void doInBackground(Void... arg0)
+    if (locationList.size() > 0)
     {
-      HttpHandler sh = new HttpHandler();
+      String str1 = locationList.get(0);
+      List<String> item1 = Arrays.asList(str1.split("\\s*,\\s*"));
 
-      // Making a request to url and getting response
-      String jsonStr = sh.makeServiceCall(url);
+      startTime = item1.get(0);
+      startLatitude = item1.get(1);
+      startLongitude = item1.get(2);
 
-      if (jsonStr != null)
-      {
-        try
-        {
-          JSONObject jsonObj = new JSONObject(jsonStr);
+      String str2 = locationList.get(locationList.size() - 1);
+      List<String> item2 = Arrays.asList(str2.split("\\s*,\\s*"));
 
-          // Getting JSON Array node
-          JSONArray locationData = jsonObj.getJSONArray("results");
-
-          // looping through all data
-          for (int i = 0; i < locationData.length(); i++)
-          {
-            JSONObject c = locationData.getJSONObject(1);
-
-            String foundAddress = c.getString("formatted_address");
-            if(startAddess.equals(""))
-            {
-              startAddess = foundAddress;
-            }
-            else
-            {
-              endAddress = foundAddress;
-            }
-            Log.w("xxxxxx",""+foundAddress);
-          }
-        }
-        catch (final JSONException e)
-        {
-          Log.e(TAG, "Json parsing error: " + e.getMessage());
-        }
-      } else
-      {
-        Log.e(TAG, "Couldn't get json from server.");
-      }
-
-      return null;
-    }
-
-    @Override
-    protected void onPostExecute(Void result)
-    {
-      super.onPostExecute(result);
+      stopTime = item2.get(0);
+      stopLatitude = item2.get(1);
+      stopLongitude = item2.get(2);
 
       passData();
     }
 
-    }
+  }
 
   public void passData()
   {
-    HashMap<Object, Object> hashMap = new HashMap<>();
 
-    hashMap.put("start_time", mStartTime);
-    hashMap.put("start_address", mStartAddress);
-    hashMap.put("start_lat", mStartLatitude);
-    hashMap.put("start_lng", mStartLongitude);
+    HashMap<String, String> hashMap = new HashMap<>();
 
-    hashMap.put("stop_time", mStopTime);
-    hashMap.put("stop_address", endAddress);
-    hashMap.put("stop_lat", mStopLatitude);
-    hashMap.put("stop_lng", mStopLongitude);
+    hashMap.put("start_time", startTime);
+    hashMap.put("start_lat", startLatitude);
+    hashMap.put("start_lng", startLongitude);
 
-    hashMap.put("total_time", mTotalTime);
+    hashMap.put("stop_time", stopTime);
+    hashMap.put("stop_lat", stopLatitude);
+    hashMap.put("stop_lng", stopLongitude);
 
     double mAverage = utils.calculateAverage(speedArray);
     String avgSpeed = String.format(Locale.getDefault(), "%.2f", mAverage);
     hashMap.put("avg_speed", avgSpeed);
 
     String maxSpeed = String.format(Locale.getDefault(), "%.2f", topSpeed);
-    hashMap.put("max_speed", maxSpeed);
+    hashMap.put("max_speed", String.valueOf(maxSpeed));
 
     Intent intent = new Intent(this, TripResult.class);
     intent.putExtra("map", hashMap);
     startActivity(intent);
   }
-
-  }
+}
 

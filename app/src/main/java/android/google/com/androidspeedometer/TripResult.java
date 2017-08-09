@@ -3,6 +3,7 @@ package android.google.com.androidspeedometer;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
@@ -10,25 +11,36 @@ import android.view.View;
 import android.widget.ImageButton;
 import android.widget.TextView;
 
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.Date;
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import java.util.HashMap;
-import java.util.concurrent.TimeUnit;
+import java.util.Locale;
 
 public class TripResult extends AppCompatActivity implements View.OnClickListener
 {
 
-  double xxSpeed;
-  double newSpeed, newTime;
+  String start_address = "", stop_address = "";
+
+  double newSpeedInMPS, currSpeed;
+  int newTime;
   double totDistance;
-  HashMap<String, String> hashMap;
-  String mPreference;
+
+  String mPreference, distancePreference = " meters";
   double startLat, startLng, stopLat, stopLng;
 
-  final static double MS = 0.44704;
-  final static double MPH = 0.27777;
-  final static double KPH = 1;
+  String startDate, stopDate;
+  String startLatLng, stopLatLng;
+
+  final static double MILES = 0.000621371;
+  final static double KILOMETERS = 0.001;
+
+  final static double MPH = 2.23694;
+  final static double KPH = 3.6;
+
+  private static String urlString;
+
+  TextView startAddress, stopAddress;
 
   @Override
   protected void onCreate(Bundle savedInstanceState)
@@ -41,41 +53,63 @@ public class TripResult extends AppCompatActivity implements View.OnClickListene
     mPreference = pref.getString("pref_type", null);
 
     Intent intent = getIntent();
+    @SuppressWarnings("unchecked")
+    HashMap<String, String> hashMap = (HashMap<String, String>) intent.getSerializableExtra("map");
 
-    hashMap = (HashMap<String, String>) intent.getSerializableExtra("map");
+    startDate = hashMap.get("start_time");
+    stopDate = hashMap.get("stop_time");
+
 
     startLat = Double.valueOf(hashMap.get("start_lat"));
     startLng = Double.valueOf(hashMap.get("start_lng"));
+    startLatLng = startLat + "," + startLng;
+    urlString = "http://maps.googleapis.com/maps/api/geocode/json?latlng=" + startLatLng;
+    new GetAddresses().execute();
+
     stopLat = Double.valueOf(hashMap.get("stop_lat"));
     stopLng = Double.valueOf(hashMap.get("stop_lng"));
+    stopLatLng = stopLat + "," + stopLng;
+    urlString = "http://maps.googleapis.com/maps/api/geocode/json?latlng=" + stopLatLng;
+    new GetAddresses().execute();
 
-    xxSpeed = Double.valueOf(hashMap.get("avg_speed"));
+    currSpeed = Double.valueOf(hashMap.get("avg_speed"));
+    newSpeedInMPS = utils.getSpeedInMeters(mPreference, currSpeed);
 
-    newSpeed = getSpeedInMeters();
-    try
+    newTime = utils.getTimeInSeconds(startDate, stopDate);
+
+
+    String xxx = utils.getDurationString(newTime);
+    double distance = utils.getDistanceInMPS(newSpeedInMPS, newTime);
+
+    switch (mPreference)
     {
-      newTime = getTimeInSeconds();
-    } catch (ParseException e)
-    {
-      e.printStackTrace();
+      case "mph":
+        totDistance = distance * MILES;
+        newSpeedInMPS = newSpeedInMPS * MPH;
+        distancePreference = " miles";
+        break;
+      case "kph":
+        totDistance = distance * KILOMETERS;
+        newSpeedInMPS = newSpeedInMPS * KPH;
+        distancePreference = " kilometers";
+        break;
+      default:
+        totDistance = distance;
+        break;
     }
 
-    getDistanceInMPS(newSpeed, newTime);
-
     TextView startTime = (TextView) findViewById(R.id.results_start_time);
-    startTime.setText(hashMap.get("start_time"));
+    startTime.setText(startDate);
 
-    TextView startAddress = (TextView) findViewById(R.id.results_start_location);
-    startAddress.setText(hashMap.get("start_address"));
+    startAddress = (TextView) findViewById(R.id.results_start_location);
 
     TextView stopTime = (TextView) findViewById(R.id.results_end_time);
-    stopTime.setText(hashMap.get("stop_time"));
+    stopTime.setText(stopDate);
 
-    TextView stopAddress = (TextView) findViewById(R.id.results_end_location);
-    stopAddress.setText(hashMap.get("stop_address"));
+    stopAddress = (TextView) findViewById(R.id.results_end_location);
 
     TextView totalTime = (TextView) findViewById(R.id.results_total_time);
-    totalTime.setText(hashMap.get("total_time"));
+    totalTime.setText(xxx);
 
     ImageButton buttonStart = (ImageButton) findViewById(R.id.imageButton1);
     buttonStart.setOnClickListener(this);
@@ -90,11 +124,12 @@ public class TripResult extends AppCompatActivity implements View.OnClickListene
     String avg1 = hashMap.get("avg_speed") + " " + mPreference;
     avgSpeed.setText(avg1);
 
+    TextView totalDisance = (TextView) findViewById(R.id.results_distance);
+    String mDistance = String.format(Locale.getDefault(), "%.2f", totDistance) + distancePreference;
+    totalDisance.setText(mDistance);
 
-
-    TextView distance = (TextView) findViewById(R.id.results_distance);
-    distance.setText(String.valueOf(utils.getDistance(startLat, startLng, stopLat, stopLng)));
   }
+
 
   @Override
   public void onClick(View view)
@@ -114,60 +149,7 @@ public class TripResult extends AppCompatActivity implements View.OnClickListene
     }
   }
 
-  public double getSpeedInMeters()
-  {
-    double speedInMeters;
-    double currSpeed = Double.valueOf(hashMap.get("avg_speed"));
 
-    switch (mPreference)
-    {
-      case "mph":
-        speedInMeters = currSpeed * MPH;
-        break;
-      case "kph":
-        speedInMeters = currSpeed * KPH;
-        break;
-      default:
-        speedInMeters = currSpeed;
-        break;
-    }
-    return speedInMeters;
-  }
-
-  public double getTimeInSeconds() throws ParseException
-  {
-    long seconds = 0;
-
-    String dateStart = hashMap.get("start_time");
-    String dateStop = hashMap.get("stop_time");
-
-    //HH converts hour in 24 hours format (0-23), day calculation
-    SimpleDateFormat format = new SimpleDateFormat("dd-MM-yyyy HH:mm:ss");
-
-    Date d1 = null;
-    Date d2 = null;
-
-    try
-    {
-      d1 = format.parse(dateStart);
-      d2 = format.parse(dateStop);
-
-      //in milliseconds
-      long diff = d2.getTime() - d1.getTime();
-      seconds = TimeUnit.MILLISECONDS.toSeconds(diff);
-
-      Log.w("new ", "secs" + seconds);
-    }
-    catch (Exception e) {
-      e.printStackTrace();
-    }
-      return (double) seconds;
-
-  }
-  public void getDistance()
-  {
-
-  }
 
   // Opens Google maps
   public void openMap(double lat, double lng)
@@ -182,68 +164,93 @@ public class TripResult extends AppCompatActivity implements View.OnClickListene
   }
 
 
-  // distance = speed X time
 
- /// ms   mph   kph
 
-  public void doCalcs()
+
+
+
+
+  private class GetAddresses extends AsyncTask<Void, Void, Void>
   {
 
-  }
+    JSONParser jsonParser = new JSONParser();
 
-  public void doTime() throws ParseException
-  {
-    String dateStart = hashMap.get("start_time");
-    String dateStop = hashMap.get("stop_time");
+    @Override
+    protected void onPreExecute()
+    {
+      Log.w("onPreExecute", "");
+    }
 
-    //HH converts hour in 24 hours format (0-23), day calculation
-    SimpleDateFormat format = new SimpleDateFormat("dd-MM-yyyy HH:mm:ss");
+    @Override
+    protected Void doInBackground(Void... arg0)
+    {
 
-    Date d1 = null;
-    Date d2 = null;
+      try
+      {
 
-    try {
-      d1 = format.parse(dateStart);
-      d2 = format.parse(dateStop);
+        JSONObject json = jsonParser.makeHttpRequest(urlString);
 
-      //in milliseconds
-      long diff = d2.getTime() - d1.getTime();
+        if (json != null)
+        {
+          JSONArray contacts = json.getJSONArray("results");
+          JSONObject c = contacts.getJSONObject(0);
+          String foundAddress = c.getString("formatted_address");
 
-      long seconds = TimeUnit.MILLISECONDS.toSeconds(diff);
+          Log.w("foundAddress ",""+foundAddress);
 
-      Log.w("new ","secs"+seconds);
+          if(foundAddress.equals(""))
+          {
+            foundAddress = "ADDRESS NOT FOUND";
+          }
 
-      long diffSeconds = diff / 1000 % 60;
-      long diffMinutes = diff / (60 * 1000) % 60;
-      long diffHours = diff / (60 * 60 * 1000) % 24;
-      long diffDays = diff / (24 * 60 * 60 * 1000);
+          if (start_address.equals(""))
+          {
+            start_address = foundAddress;
 
-      long totHours = diffHours + (24*diffDays);
+            Log.w("start_address ",""+start_address);
 
-      Log.w("totHours   ","totHours  : "+totHours);
+            setAddressText("start");
 
-      Log.w("Time ","diffDays: "+diffDays);
-      Log.w("Time ","diffHours: "+diffHours);
-      Log.w("Time ","diffMinutes: "+diffMinutes);
-      Log.w("Time ","diffSeconds: "+diffSeconds);
+          } else
+          {
+            stop_address = foundAddress;
+            Log.w("stop_address ",""+stop_address);
+            setAddressText("stop");
+          }
+        }
 
-      String all = diffDays + ":" + diffHours + ":" + diffMinutes + ":" +diffSeconds;
+      } catch (Exception e)
+      {
+        e.printStackTrace();
+      }
 
-      Log.w("xx "," "+all);
+      return null;
+    }
 
-    } catch (Exception e) {
-      e.printStackTrace();
+    protected void onPostExecute(Void result)
+    {
+
     }
   }
 
-
-  public void getDistanceInMPS(double speed, double time)
+  public void setAddressText(final String foo)
   {
-    double distance = speed * time;
+    runOnUiThread(new Runnable() {
+      @Override
+      public void run() {
 
-    Log.w("distanceMethod"," "+distance + " in meters");
+        if(foo.equals("start"))
+        {
+          startAddress.setText(start_address);
+        }
+        else
+        {
+          stopAddress.setText(stop_address);
+        }
+
+      }
+    });
+
+
   }
-
-
-
 }
