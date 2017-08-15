@@ -5,7 +5,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:layout_margin="@dimen/padding"
+    android:background="@color/colorBlack"
     android:gravity="center_horizontal"
     tools:context="android.google.com.androidspeedometer.TripResult">
 
@@ -17,119 +17,117 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content">
 
-
-
-
-    <TextView
-        android:id="@+id/textView1"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_alignParentTop="true"
-        android:layout_centerHorizontal="true"
-        android:layout_marginTop="5dp"
-        android:text="Trip Start"
-        android:textAlignment="center"
-        android:textSize="18sp"
-        android:textStyle="bold"/>
-
-    <TextView
-        android:id="@+id/results_start_time"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_below="@+id/textView1"
-        android:layout_centerHorizontal="true"
-        android:textAlignment="center"/>
-
-
-
-    <LinearLayout
-        android:id="@+id/linLayout"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_alignParentStart="true"
-        android:layout_below="@+id/results_start_time"
-        android:gravity="right"
-        android:orientation="horizontal">
-
-        <TextView
-            android:id="@+id/results_start_location"
-            android:layout_width="200dp"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="20dp"
-            android:minLines="2"
-            android:textAlignment="center"/>
-
-        <ImageButton
-            android:id="@+id/imageButton1"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            app:srcCompat="@android:drawable/ic_menu_mylocation"/>
-    </LinearLayout>
-
-
-    <TextView
-        android:id="@+id/textView2"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_below="@+id/linLayout"
-        android:layout_centerHorizontal="true"
-        android:layout_marginTop="30dp"
-        android:text="Trip Finish"
-        android:textAlignment="center"
-        android:textSize="18sp"
-        android:textStyle="bold"/>
-
-    <TextView
-        android:id="@+id/results_end_time"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_below="@+id/textView2"
-        android:layout_centerHorizontal="true"
-        android:textAlignment="center"/>
-
-    <LinearLayout
-        android:id="@+id/linLayout2"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="right"
-        android:layout_below="@+id/results_end_time"
-        android:layout_alignParentStart="true">
-
-        <TextView
-            android:id="@+id/results_end_location"
-            android:layout_width="200dp"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="20dp"
-            android:minLines="2"
-            android:textAlignment="center"/>
-
-        <ImageButton
-            android:id="@+id/imageButton2"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            app:srcCompat="@android:drawable/ic_menu_mylocation"/>
-    </LinearLayout>
+            <TextView
+                android:id="@+id/textView1"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_alignParentTop="true"
+                android:layout_centerHorizontal="true"
+                android:layout_marginTop="5dp"
+                android:text="Trip Start"
+                android:textAlignment="center"
+                android:textSize="18sp"
+                android:textStyle="bold"/>
 
             <TextView
-        android:id="@+id/textView3"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_below="@+id/linLayout2"
-        android:layout_centerHorizontal="true"
-        android:layout_marginTop="30dp"
-        android:text="Total Trip Time"
-        android:textAlignment="center"
-        android:textSize="18sp"
-        android:textStyle="bold"/>
+                android:id="@+id/results_start_time"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_below="@+id/textView1"
+                android:layout_centerHorizontal="true"
+                android:textAlignment="center"/>
 
-    <TextView
-        android:id="@+id/results_total_time"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_below="@+id/textView3"
-        android:layout_centerHorizontal="true"
-        android:textAlignment="center"/>
+
+            <LinearLayout
+                android:id="@+id/linLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_alignParentStart="true"
+                android:layout_below="@+id/results_start_time"
+                android:gravity="end"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/results_start_location"
+                    android:layout_width="200dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="20dp"
+                    android:minLines="2"
+                    android:textAlignment="center"/>
+
+                <ImageButton
+                    android:id="@+id/imageButton1"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginRight="10dp"
+                    app:srcCompat="@android:drawable/ic_menu_mylocation"/>
+            </LinearLayout>
+
+
+            <TextView
+                android:id="@+id/textView2"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_below="@+id/linLayout"
+                android:layout_centerHorizontal="true"
+                android:layout_marginTop="30dp"
+                android:text="Trip Finish"
+                android:textAlignment="center"
+                android:textSize="18sp"
+                android:textStyle="bold"/>
+
+            <TextView
+                android:id="@+id/results_end_time"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_below="@+id/textView2"
+                android:layout_centerHorizontal="true"
+                android:textAlignment="center"/>
+
+            <LinearLayout
+                android:id="@+id/linLayout2"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_alignParentStart="true"
+                android:layout_below="@+id/results_end_time"
+                android:gravity="right"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/results_end_location"
+                    android:layout_width="200dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="20dp"
+                    android:minLines="2"
+                    android:textAlignment="center"/>
+
+                <ImageButton
+                    android:id="@+id/imageButton2"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginRight="10dp"
+                    app:srcCompat="@android:drawable/ic_menu_mylocation"/>
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/textView3"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_below="@+id/linLayout2"
+                android:layout_centerHorizontal="true"
+                android:layout_marginTop="30dp"
+                android:text="Total Trip Time"
+                android:textAlignment="center"
+                android:textSize="18sp"
+                android:textStyle="bold"/>
+
+            <TextView
+                android:id="@+id/results_total_time"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_below="@+id/textView3"
+                android:layout_centerHorizontal="true"
+                android:textAlignment="center"/>
 
             <TextView
                 android:id="@+id/textView4"
@@ -143,53 +141,53 @@
                 android:textSize="18sp"
                 android:textStyle="bold"/>
 
-    <TextView
-        android:id="@+id/results_distance"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_below="@+id/textView4"
-        android:layout_centerHorizontal="true"
-        android:textAlignment="center"/>
+            <TextView
+                android:id="@+id/results_distance"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_below="@+id/textView4"
+                android:layout_centerHorizontal="true"
+                android:textAlignment="center"/>
 
-    <TextView
-        android:id="@+id/textView5"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_below="@+id/results_distance"
-        android:layout_centerHorizontal="true"
-        android:layout_marginTop="30dp"
-        android:text="Max Speed"
-        android:textAlignment="center"
-        android:textSize="18sp"
-        android:textStyle="bold"/>
+            <TextView
+                android:id="@+id/textView5"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_below="@+id/results_distance"
+                android:layout_centerHorizontal="true"
+                android:layout_marginTop="30dp"
+                android:text="Max Speed"
+                android:textAlignment="center"
+                android:textSize="18sp"
+                android:textStyle="bold"/>
 
-    <TextView
-        android:id="@+id/results_max_speed"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_below="@+id/textView5"
-        android:layout_centerHorizontal="true"
-        android:textAlignment="center"/>
+            <TextView
+                android:id="@+id/results_max_speed"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_below="@+id/textView5"
+                android:layout_centerHorizontal="true"
+                android:textAlignment="center"/>
 
-    <TextView
-        android:id="@+id/textView6"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_below="@+id/results_max_speed"
-        android:layout_centerHorizontal="true"
-        android:layout_marginTop="30dp"
-        android:text="Avg Speed"
-        android:textAlignment="center"
-        android:textSize="18sp"
-        android:textStyle="bold"/>
+            <TextView
+                android:id="@+id/textView6"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_below="@+id/results_max_speed"
+                android:layout_centerHorizontal="true"
+                android:layout_marginTop="30dp"
+                android:text="Avg Speed"
+                android:textAlignment="center"
+                android:textSize="18sp"
+                android:textStyle="bold"/>
 
-    <TextView
-        android:id="@+id/results_avg_speed"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_below="@+id/textView6"
-        android:layout_centerHorizontal="true"
-        android:textAlignment="center"/>
+            <TextView
+                android:id="@+id/results_avg_speed"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_below="@+id/textView6"
+                android:layout_centerHorizontal="true"
+                android:textAlignment="center"/>
 
 
         </RelativeLayout>

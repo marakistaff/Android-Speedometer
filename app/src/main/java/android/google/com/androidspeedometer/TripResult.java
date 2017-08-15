@@ -16,31 +16,25 @@ import org.json.JSONObject;
 
 import java.util.HashMap;
 import java.util.Locale;
+import java.util.concurrent.TimeUnit;
 
 public class TripResult extends AppCompatActivity implements View.OnClickListener
 {
 
-  String start_address = "", stop_address = "";
+  private String start_address = "", stop_address = "";
 
-  double newSpeedInMPS, currSpeed;
-  int newTime;
-  double totDistance;
+  private String distancePreference = " meters";
+  private double startLat, startLng, stopLat, stopLng;
 
-  String mPreference, distancePreference = " meters";
-  double startLat, startLng, stopLat, stopLng;
+  private final static double MILES = 0.000621371;
+  private final static double KILOMETERS = 0.001;
 
-  String startDate, stopDate;
-  String startLatLng, stopLatLng;
+  private final static double MPH = 2.23694;
+  private final static double KPH = 3.6;
 
-  final static double MILES = 0.000621371;
-  final static double KILOMETERS = 0.001;
+  private String urlString;
 
-  final static double MPH = 2.23694;
-  final static double KPH = 3.6;
-
-  private static String urlString;
-
-  TextView startAddress, stopAddress;
+  private TextView startAddress, stopAddress;
 
   @Override
   protected void onCreate(Bundle savedInstanceState)
@@ -50,48 +44,51 @@ public class TripResult extends AppCompatActivity implements View.OnClickListene
 
     //Reading from SharedPreferences - ms , mph , kph
     SharedPreferences pref = getApplicationContext().getSharedPreferences("speedPref", MODE_PRIVATE);
-    mPreference = pref.getString("pref_type", null);
+    String mPreference = pref.getString("pref_type", null);
 
     Intent intent = getIntent();
     @SuppressWarnings("unchecked")
     HashMap<String, String> hashMap = (HashMap<String, String>) intent.getSerializableExtra("map");
 
-    startDate = hashMap.get("start_time");
-    stopDate = hashMap.get("stop_time");
+    String startDate = hashMap.get("start_time");
+    String stopDate = hashMap.get("stop_time");
+    String totalTime1 = hashMap.get("total_time");
+    long millisecondTime = Long.valueOf(totalTime1);
+    String formattedTime = formatTime(millisecondTime);
 
-
-    startLat = Double.valueOf(hashMap.get("start_lat"));
-    startLng = Double.valueOf(hashMap.get("start_lng"));
-    startLatLng = startLat + "," + startLng;
-    urlString = "http://maps.googleapis.com/maps/api/geocode/json?latlng=" + startLatLng;
+    this.startLat = Double.valueOf(hashMap.get("start_lat"));
+    this.startLng = Double.valueOf(hashMap.get("start_lng"));
+    String startLatLng = startLat + "," + startLng;
+    this.urlString = "http://maps.googleapis.com/maps/api/geocode/json?latlng=" + startLatLng;
     new GetAddresses().execute();
 
-    stopLat = Double.valueOf(hashMap.get("stop_lat"));
-    stopLng = Double.valueOf(hashMap.get("stop_lng"));
-    stopLatLng = stopLat + "," + stopLng;
-    urlString = "http://maps.googleapis.com/maps/api/geocode/json?latlng=" + stopLatLng;
+    this.stopLat = Double.valueOf(hashMap.get("stop_lat"));
+    this.stopLng = Double.valueOf(hashMap.get("stop_lng"));
+    String stopLatLng = stopLat + "," + stopLng;
+    this.urlString = "http://maps.googleapis.com/maps/api/geocode/json?latlng=" + stopLatLng;
     new GetAddresses().execute();
 
-    currSpeed = Double.valueOf(hashMap.get("avg_speed"));
-    newSpeedInMPS = utils.getSpeedInMeters(mPreference, currSpeed);
+    double currSpeed = Double.valueOf(hashMap.get("avg_speed"));
+    double newSpeedInMPS = utils.getSpeedInMeters(mPreference, currSpeed);
 
-    newTime = utils.getTimeInSeconds(startDate, stopDate);
+    long timeInSeconds = TimeUnit.MILLISECONDS.toSeconds(millisecondTime);
 
+    double distance = newSpeedInMPS * timeInSeconds;
+    Log.w("distance ", "" + distance);
 
-    String xxx = utils.getDurationString(newTime);
-    double distance = utils.getDistanceInMPS(newSpeedInMPS, newTime);
-
+    double totDistance;
+    assert mPreference != null;
     switch (mPreference)
     {
       case "mph":
         totDistance = distance * MILES;
         newSpeedInMPS = newSpeedInMPS * MPH;
-        distancePreference = " miles";
+        this.distancePreference = " miles";
         break;
       case "kph":
         totDistance = distance * KILOMETERS;
         newSpeedInMPS = newSpeedInMPS * KPH;
-        distancePreference = " kilometers";
+        this.distancePreference = " kilometers";
         break;
       default:
         totDistance = distance;
@@ -101,15 +98,15 @@ public class TripResult extends AppCompatActivity implements View.OnClickListene
     TextView startTime = (TextView) findViewById(R.id.results_start_time);
     startTime.setText(startDate);
 
-    startAddress = (TextView) findViewById(R.id.results_start_location);
+    this.startAddress = (TextView) findViewById(R.id.results_start_location);
 
     TextView stopTime = (TextView) findViewById(R.id.results_end_time);
     stopTime.setText(stopDate);
 
-    stopAddress = (TextView) findViewById(R.id.results_end_location);
+    this.stopAddress = (TextView) findViewById(R.id.results_end_location);
 
     TextView totalTime = (TextView) findViewById(R.id.results_total_time);
-    totalTime.setText(xxx);
+    totalTime.setText(formattedTime);
 
     ImageButton buttonStart = (ImageButton) findViewById(R.id.imageButton1);
     buttonStart.setOnClickListener(this);
@@ -124,9 +121,9 @@ public class TripResult extends AppCompatActivity implements View.OnClickListene
     String avg1 = hashMap.get("avg_speed") + " " + mPreference;
     avgSpeed.setText(avg1);
 
-    TextView totalDisance = (TextView) findViewById(R.id.results_distance);
-    String mDistance = String.format(Locale.getDefault(), "%.2f", totDistance) + distancePreference;
-    totalDisance.setText(mDistance);
+    TextView totalDistance = (TextView) findViewById(R.id.results_distance);
+    String mDistance = String.format(Locale.getDefault(), "%.2f", totDistance) + this.distancePreference;
+    totalDistance.setText(mDistance);
 
   }
 
@@ -149,8 +146,6 @@ public class TripResult extends AppCompatActivity implements View.OnClickListene
     }
   }
 
-
-
   // Opens Google maps
   public void openMap(double lat, double lng)
   {
@@ -164,15 +159,16 @@ public class TripResult extends AppCompatActivity implements View.OnClickListene
   }
 
 
-
-
-
-
+  public String formatTime(long millis)
+  {
+    return String.format(Locale.getDefault(), "%02d:%02d:%02d", TimeUnit.MILLISECONDS.toHours(millis),
+      TimeUnit.MILLISECONDS.toMinutes(millis) % TimeUnit.HOURS.toMinutes(1),
+      TimeUnit.MILLISECONDS.toSeconds(millis) % TimeUnit.MINUTES.toSeconds(1));
+  }
 
 
   private class GetAddresses extends AsyncTask<Void, Void, Void>
   {
-
     JSONParser jsonParser = new JSONParser();
 
     @Override
@@ -196,9 +192,7 @@ public class TripResult extends AppCompatActivity implements View.OnClickListene
           JSONObject c = contacts.getJSONObject(0);
           String foundAddress = c.getString("formatted_address");
 
-          Log.w("foundAddress ",""+foundAddress);
-
-          if(foundAddress.equals(""))
+          if (foundAddress.equals(""))
           {
             foundAddress = "ADDRESS NOT FOUND";
           }
@@ -207,14 +201,14 @@ public class TripResult extends AppCompatActivity implements View.OnClickListene
           {
             start_address = foundAddress;
 
-            Log.w("start_address ",""+start_address);
+            Log.w("start_address ", "" + start_address);
 
             setAddressText("start");
 
           } else
           {
             stop_address = foundAddress;
-            Log.w("stop_address ",""+stop_address);
+            Log.w("stop_address ", "" + stop_address);
             setAddressText("stop");
           }
         }
@@ -223,34 +217,31 @@ public class TripResult extends AppCompatActivity implements View.OnClickListene
       {
         e.printStackTrace();
       }
-
       return null;
     }
 
     protected void onPostExecute(Void result)
-    {
-
-    }
+    {}
   }
 
   public void setAddressText(final String foo)
   {
-    runOnUiThread(new Runnable() {
+    runOnUiThread(new Runnable()
+    {
       @Override
-      public void run() {
+      public void run()
+      {
 
-        if(foo.equals("start"))
+        if (foo.equals("start"))
         {
           startAddress.setText(start_address);
-        }
-        else
+        } else
         {
           stopAddress.setText(stop_address);
         }
 
       }
     });
-
-
   }
+
 }

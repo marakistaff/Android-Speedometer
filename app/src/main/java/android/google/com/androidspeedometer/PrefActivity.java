@@ -3,11 +3,24 @@ package android.google.com.androidspeedometer;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
+import android.view.View;
+import android.widget.Button;
+import android.widget.CompoundButton;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
+import android.widget.SeekBar;
+import android.widget.TextView;
+import android.widget.ToggleButton;
 
 public class PrefActivity extends AppCompatActivity
 {
+  private SeekBar seekBar;
+  private TextView textViewSetSpeed;
+  private RadioGroup radioGroup;
+  private ToggleButton toggle;
+  private String myPref_type, onOrOff, user_top_speed;
+  private Button btnSave;
+  private SharedPreferences pref;
 
   @Override
   protected void onCreate(Bundle savedInstanceState)
@@ -15,17 +28,21 @@ public class PrefActivity extends AppCompatActivity
     super.onCreate(savedInstanceState);
     setContentView(R.layout.activity_pref);
 
-    //Reading from SharedPreferences - gets which preference type
-    SharedPreferences pref = getApplicationContext().getSharedPreferences("speedPref", MODE_PRIVATE);
-    String myPref_type = pref.getString("pref_type", null);
+    initialiseWidgets();
 
-    if (myPref_type != null)
+    this.pref = getApplicationContext().getSharedPreferences("speedPref", MODE_PRIVATE);
+
+    //Reading from SharedPreferences - gets which preference type
+    this.myPref_type = pref.getString("pref_type", null);
+
+    if (this.myPref_type != null)
     {
-      setRadioButtonChecked(myPref_type);
+      setRadioButtonChecked(this.myPref_type);
     }
 
-    RadioGroup radioGroup = (RadioGroup) findViewById(R.id.radioGroup);
-    radioGroup.setOnCheckedChangeListener(new RadioGroup.OnCheckedChangeListener()
+    this.textViewSetSpeed.setText("0 " + myPref_type);
+
+    this.radioGroup.setOnCheckedChangeListener(new RadioGroup.OnCheckedChangeListener()
     {
 
       @Override
@@ -46,16 +63,82 @@ public class PrefActivity extends AppCompatActivity
 
     });
 
+    //
+    this.seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener()
+    {
+      int progress = 0;
+      String mProgress;
+
+      @Override
+      public void onProgressChanged(SeekBar seekBar, int progresValue, boolean fromUser)
+      {
+        //progress = progresValue;
+        this.mProgress = String.valueOf(progresValue);
+        textViewSetSpeed.setText(this.mProgress + " " + myPref_type);
+      }
+
+      @Override
+      public void onStartTrackingTouch(SeekBar seekBar)
+      {
+      }
+
+      @Override
+      public void onStopTrackingTouch(SeekBar seekBar)
+      {
+        textViewSetSpeed.setText(this.mProgress + " " + myPref_type);
+      }
+    });
+
+    toggle.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener()
+    {
+      public void onCheckedChanged(CompoundButton buttonView, boolean isChecked)
+      {
+        if (isChecked)
+        {
+          toggle.setBackgroundResource(R.color.colorGreen);
+        } else
+        {
+          toggle.setBackgroundResource(R.color.colorRed);
+        }
+      }
+    });
+
+    this.btnSave.setOnClickListener(new View.OnClickListener()
+    {
+      @Override
+      public void onClick(View v)
+      {
+        user_top_speed = textViewSetSpeed.getText().toString();
+        onOrOff = toggle.getText().toString();
+
+        saveSpeedToPrefs(user_top_speed, onOrOff);
+
+      }
+    });
   }
 
+
+  // Writing data to SharedPreferences
   private void saveTypeToPrefs(String mValue)
   {
-    // Writing data to SharedPreferences
-    SharedPreferences pref = getApplicationContext().getSharedPreferences("speedPref", MODE_PRIVATE);
     SharedPreferences.Editor editor = pref.edit();
     editor.remove("pref_type");
     editor.apply(); // commit changes
     editor.putString("pref_type", mValue);
+
+    // Save the changes in SharedPreferences
+    editor.apply(); // commit changes
+  }
+
+  // Writing data to SharedPreferences
+  private void saveSpeedToPrefs(String val1, String val2)
+  {
+    SharedPreferences.Editor editor = pref.edit();
+    editor.remove("top_speed");
+    editor.remove("on_off");
+    editor.apply(); // commit changes
+    editor.putString("top_speed", val1);
+    editor.putString("on_off", val2);
 
     // Save the changes in SharedPreferences
     editor.apply(); // commit changes
@@ -81,6 +164,15 @@ public class PrefActivity extends AppCompatActivity
         rad3.setChecked(true);
         break;
     }
+  }
+
+  private void initialiseWidgets()
+  {
+    this.textViewSetSpeed = (TextView) findViewById(R.id.textViewSetSpeed);
+    this.seekBar = (SeekBar) findViewById(R.id.seekBar1);
+    this.radioGroup = (RadioGroup) findViewById(R.id.radioGroup);
+    this.toggle = (ToggleButton) findViewById(R.id.toggle);
+    this.btnSave = (Button) findViewById(R.id.button_save);
   }
 
 }

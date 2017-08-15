@@ -8,9 +8,13 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Typeface;
 import android.location.Location;
+import android.media.AudioManager;
+import android.media.ToneGenerator;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.provider.Settings;
 import android.support.annotation.NonNull;
 import android.support.design.widget.Snackbar;
@@ -51,44 +55,21 @@ import java.util.List;
 import java.util.Locale;
 
 
-/**
- * Using location settings.
- * <p/>
- * Uses the {@link com.google.android.gms.location.SettingsApi} to ensure that the device's system
- * settings are properly configured for the app's location needs. When making a request to
- * Location services, the device's system settings may be in a state that prevents the app from
- * obtaining the location data that it needs. For example, GPS or Wi-Fi scanning may be switched
- * off. The {@code SettingsApi} makes it possible to determine if a device's system settings are
- * adequate for the location request, and to optionally invoke a dialog that allows the user to
- * enable the necessary settings.
- * <p/>
- * This sample allows the user to request location updates using the ACCESS_FINE_LOCATION setting
- * (as specified in AndroidManifest.xml).
- */
 public class MainActivity extends AppCompatActivity
 {
 
   private static final String TAG = MainActivity.class.getSimpleName();
 
-  /**
-   * Code used in requesting runtime permissions.
-   */
+  //Code used in requesting runtime permissions.
   private static final int REQUEST_PERMISSIONS_REQUEST_CODE = 34;
 
-  /**
-   * Constant used in the location settings dialog.
-   */
+  //Constant used in the location settings dialog.
   private static final int REQUEST_CHECK_SETTINGS = 0x1;
 
-  /**
-   * The desired interval for location updates. Inexact. Updates may be more or less frequent.
-   */
+  //The desired interval for location updates. Inexact. Updates may be more or less frequent.
   private static final long UPDATE_INTERVAL_IN_MILLISECONDS = 10000;
 
-  /**
-   * The fastest rate for active location updates. Exact. Updates will never be more frequent
-   * than this value.
-   */
+  // The fastest rate for active location updates. Exact. Updates will never be more frequent than this value.
   private static final long FASTEST_UPDATE_INTERVAL_IN_MILLISECONDS =
     UPDATE_INTERVAL_IN_MILLISECONDS / 2;
 
@@ -97,19 +78,13 @@ public class MainActivity extends AppCompatActivity
   private final static String KEY_LOCATION = "location";
   private final static String KEY_LAST_UPDATED_TIME_STRING = "last-updated-time-string";
 
-  /**
-   * Provides access to the Fused Location Provider API.
-   */
+  //Provides access to the Fused Location Provider API.
   private FusedLocationProviderClient mFusedLocationClient;
 
-  /**
-   * Provides access to the Location Settings API.
-   */
+  //Provides access to the Location Settings API.
   private SettingsClient mSettingsClient;
 
-  /**
-   * Stores parameters for requests to the FusedLocationProviderApi.
-   */
+  //Stores parameters for requests to the FusedLocationProviderApi.
   private LocationRequest mLocationRequest;
 
   /**
@@ -118,50 +93,59 @@ public class MainActivity extends AppCompatActivity
    */
   private LocationSettingsRequest mLocationSettingsRequest;
 
-  /**
-   * Callback for Location events.
-   */
+  //Callback for Location events.
   private LocationCallback mLocationCallback;
 
-  /**
-   * Represents a geographical location.
-   */
+  //Represents a geographical location.
   private Location mCurrentLocation;
 
-  // UI Widgets.
+  //UI Widgets.
   Button mStartStopButton;
-  TextView mSpeedTextView;
+  TextView mSpeedTextView, mStopWatch, mMaxSpeed, mAvgSpeed, mSpeedTypeTextView;
 
-  /**
-   * Tracks the status of the location updates request. Value changes when the user presses the
-   * Start Updates and Stop Updates buttons.
-   */
+  //Tracks the status of the location updates request. Value changes when the user presses the start/stop button.
   private Boolean mRequestingLocationUpdates;
 
-  /**
-   * Time when the location was updated represented as a String.
-   */
+  //Time when the location was updated represented as a String.
   private String mLastUpdateTime;
 
-  //
-  ArrayList<String> locationList;
+  //Arraylist to hold each location update data
+  private ArrayList<String> locationList;
 
-  //
+  //User preferences
   private String mPreference;
+  String mOnOrOff = "";
+  int mTopSpeedLimit = -1;
 
   //
   private static final double mph = 2.23694;
   private static final double kph = 3.6;
 
   //
-  double topSpeed;
+  private double topSpeed;
 
   //
   private List<Double> speedArray = new ArrayList<>();
 
-  String startTime, startLatitude, startLongitude;
+  private String startTime;
+  private String startLatitude;
+  private String startLongitude;
 
-  String stopTime, stopLatitude, stopLongitude;
+  private String stopTime, stopLatitude, stopLongitude;
+
+  private long MillisecondTime, StartTime, TimeBuff ;
+
+  private Handler handler;
+
+  private String avgSpeed;
+
+  private Typeface custom_font;
+
+  // tone generator
+  private int streamType = AudioManager.STREAM_MUSIC;
+  private int volume = 100;
+  private ToneGenerator toneGenerator = new ToneGenerator(streamType, volume);
+
 
   @Override
   public void onCreate(Bundle savedInstanceState)
@@ -172,20 +156,17 @@ public class MainActivity extends AppCompatActivity
     // keep sceen on
     getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
-    locationList = new ArrayList<>();
+    this.locationList = new ArrayList<>();
+    this.handler = new Handler() ;
 
-    // custom font
-    Typeface custom_font = Typeface.createFromAsset(getAssets(), "fonts/myfont.ttf");
+    initialiseWidgets();
+    retrieveSharedPreferences();
 
-    // Locate the UI widgets.
-    mStartStopButton = (Button) findViewById(R.id.start_updates_button);
-    mSpeedTextView = (TextView) findViewById(R.id.speed_text);
-    mSpeedTextView.setTypeface(custom_font);
-    TextView mSpeedTypeTextView = (TextView) findViewById(R.id.speedTypeTextView);
-    mSpeedTypeTextView.setTypeface(custom_font);
+    // custom font from assets folder
+    this.custom_font = Typeface.createFromAsset(getAssets(), "fonts/myfont.ttf");
 
-    // Add button listener
-    mStartStopButton.setOnClickListener(new View.OnClickListener()
+    //Main start/stop button button listener
+    this.mStartStopButton.setOnClickListener(new View.OnClickListener()
     {
       @Override
       public void onClick(View v)
@@ -195,36 +176,24 @@ public class MainActivity extends AppCompatActivity
         if (buttonText.equalsIgnoreCase("START"))
         {
           speedArray.clear();
+          mStartStopButton.setBackgroundResource(R.drawable.stop_button);
           startUpdatesButtonHandler(v);
         } else
         {
           stopUpdatesButtonHandler(v);
+          mStartStopButton.setBackgroundResource(R.drawable.start_button);
         }
       }
     });
 
-    //Reading from SharedPreferences
-    SharedPreferences pref = getApplicationContext().getSharedPreferences("speedPref", MODE_PRIVATE);
-    mPreference = pref.getString("pref_type", null);
-
-    Log.w("mPreference ", "" + mPreference);
-
-    if (this.mPreference != null)
-    {
-      mSpeedTypeTextView.setText(mPreference);
-    } else
-    {
-      this.mPreference = "miles";
-    }
-
-    mRequestingLocationUpdates = false;
-    mLastUpdateTime = "";
+    this.mRequestingLocationUpdates = false;
+    this.mLastUpdateTime = "";
 
     // Update values using data stored in the Bundle.
     updateValuesFromBundle(savedInstanceState);
 
-    mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
-    mSettingsClient = LocationServices.getSettingsClient(this);
+    this.mFusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
+    this.mSettingsClient = LocationServices.getSettingsClient(this);
 
     // Kick off the process of building the LocationCallback, LocationRequest, and
     // LocationSettingsRequest objects.
@@ -244,10 +213,9 @@ public class MainActivity extends AppCompatActivity
   public boolean onOptionsItemSelected(MenuItem item) {
     // Handle item selection
     Intent intent = new Intent(this, PrefActivity.class);
-    startActivity(intent);
+    this.startActivity(intent);
 
     return super.onOptionsItemSelected(item);
-
   }
 
   /**
@@ -263,7 +231,7 @@ public class MainActivity extends AppCompatActivity
       // the Start Updates and Stop Updates buttons are correctly enabled or disabled.
       if (savedInstanceState.keySet().contains(KEY_REQUESTING_LOCATION_UPDATES))
       {
-        mRequestingLocationUpdates = savedInstanceState.getBoolean(
+        this.mRequestingLocationUpdates = savedInstanceState.getBoolean(
           KEY_REQUESTING_LOCATION_UPDATES);
       }
 
@@ -273,46 +241,29 @@ public class MainActivity extends AppCompatActivity
       {
         // Since KEY_LOCATION was found in the Bundle, we can be sure that mCurrentLocation
         // is not null.
-        mCurrentLocation = savedInstanceState.getParcelable(KEY_LOCATION);
+        this.mCurrentLocation = savedInstanceState.getParcelable(KEY_LOCATION);
       }
 
       // Update the value of mLastUpdateTime from the Bundle and update the UI.
       if (savedInstanceState.keySet().contains(KEY_LAST_UPDATED_TIME_STRING))
       {
-        mLastUpdateTime = savedInstanceState.getString(KEY_LAST_UPDATED_TIME_STRING);
+        this.mLastUpdateTime = savedInstanceState.getString(KEY_LAST_UPDATED_TIME_STRING);
       }
       updateUI();
     }
   }
 
-  /**
-   * Sets up the location request. Android has two location request settings:
-   * {@code ACCESS_COARSE_LOCATION} and {@code ACCESS_FINE_LOCATION}. These settings control
-   * the accuracy of the current location. This sample uses ACCESS_FINE_LOCATION, as defined in
-   * the AndroidManifest.xml.
-   * <p/>
-   * When the ACCESS_FINE_LOCATION setting is specified, combined with a fast update
-   * interval (5 seconds), the Fused Location Provider API returns location updates that are
-   * accurate to within a few feet.
-   * <p/>
-   * These settings are appropriate for mapping applications that show real-time location
-   * updates.
-   */
+  //Sets up the location request.
   private void createLocationRequest()
   {
-    mLocationRequest = new LocationRequest();
+    this.mLocationRequest = new LocationRequest();
 
-    // Sets the desired interval for active location updates. This interval is
-    // inexact. You may not receive updates at all if no location sources are available, or
-    // you may receive them slower than requested. You may also receive updates faster than
-    // requested if other applications are requesting location at a faster interval.
-    mLocationRequest.setInterval(UPDATE_INTERVAL_IN_MILLISECONDS);
+    // Sets the desired interval for active location updates.
+    this.mLocationRequest.setInterval(UPDATE_INTERVAL_IN_MILLISECONDS);
 
-    // Sets the fastest rate for active location updates. This interval is exact, and your
-    // application will never receive updates faster than this value.
-    mLocationRequest.setFastestInterval(FASTEST_UPDATE_INTERVAL_IN_MILLISECONDS);
-
-    mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
+    // Sets the fastest rate for active location updates.
+    this.mLocationRequest.setFastestInterval(FASTEST_UPDATE_INTERVAL_IN_MILLISECONDS);
+    this.mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
   }
 
   /**
@@ -343,7 +294,7 @@ public class MainActivity extends AppCompatActivity
   {
     LocationSettingsRequest.Builder builder = new LocationSettingsRequest.Builder();
     builder.addLocationRequest(mLocationRequest);
-    mLocationSettingsRequest = builder.build();
+    this.mLocationSettingsRequest = builder.build();
   }
 
   @Override
@@ -356,12 +307,9 @@ public class MainActivity extends AppCompatActivity
         switch (resultCode)
         {
           case Activity.RESULT_OK:
-            Log.i(TAG, "User agreed to make required location settings changes.");
-            // Nothing to do. startLocationupdates() gets called in onResume again.
             break;
           case Activity.RESULT_CANCELED:
-            Log.i(TAG, "User chose not to make required location settings changes.");
-            mRequestingLocationUpdates = false;
+            this.mRequestingLocationUpdates = false;
             updateUI();
             break;
         }
@@ -370,27 +318,22 @@ public class MainActivity extends AppCompatActivity
   }
 
   /**
-   * Handles the Start Updates button and requests start of location updates. Does nothing if
+   * Handles the start button and requests start of location updates. Does nothing if
    * updates have already been requested.
    */
   public void startUpdatesButtonHandler(View view)
   {
-    if (!mRequestingLocationUpdates)
+    if (!this.mRequestingLocationUpdates)
     {
-      mRequestingLocationUpdates = true;
+      this.mRequestingLocationUpdates = true;
       setButtonsEnabledState();
       startLocationUpdates();
     }
   }
 
-  /**
-   * Handles the Stop Updates button, and requests removal of location updates.
-   */
+  //Handles the stop button, and requests removal of location updates.
   public void stopUpdatesButtonHandler(View view)
   {
-    // It is a good practice to remove location requests when the activity is in a paused or
-    // stopped state. Doing so helps battery performance and is especially
-    // recommended in applications that request frequent location updates.
     stopLocationUpdates();
     getResults();
   }
@@ -402,14 +345,12 @@ public class MainActivity extends AppCompatActivity
   private void startLocationUpdates()
   {
     // Begin by checking if the device has the necessary location settings.
-    mSettingsClient.checkLocationSettings(mLocationSettingsRequest)
+    this.mSettingsClient.checkLocationSettings(mLocationSettingsRequest)
       .addOnSuccessListener(this, new OnSuccessListener<LocationSettingsResponse>()
       {
         @Override
         public void onSuccess(LocationSettingsResponse locationSettingsResponse)
         {
-          Log.i(TAG, "All location settings are satisfied.");
-
           //noinspection MissingPermission
           mFusedLocationClient.requestLocationUpdates(mLocationRequest,
             mLocationCallback, Looper.myLooper());
@@ -426,17 +367,14 @@ public class MainActivity extends AppCompatActivity
           switch (statusCode)
           {
             case LocationSettingsStatusCodes.RESOLUTION_REQUIRED:
-              Log.i(TAG, "Location settings are not satisfied. Attempting to upgrade " +
-                "location settings ");
               try
               {
                 // Show the dialog by calling startResolutionForResult(), and check the
                 // result in onActivityResult().
                 ResolvableApiException rae = (ResolvableApiException) e;
                 rae.startResolutionForResult(MainActivity.this, REQUEST_CHECK_SETTINGS);
-              } catch (IntentSender.SendIntentException sie)
+              } catch (IntentSender.SendIntentException ignored)
               {
-                Log.i(TAG, "PendingIntent unable to execute request.");
               }
               break;
             case LocationSettingsStatusCodes.SETTINGS_CHANGE_UNAVAILABLE:
@@ -461,39 +399,32 @@ public class MainActivity extends AppCompatActivity
     updateLocationUI();
   }
 
-  /**
-   * Disables both buttons when functionality is disabled due to insuffucient location settings.
-   * Otherwise ensures that only one button is enabled at any time. The Start Updates button is
-   * enabled if the user is not requesting location updates. The Stop Updates button is enabled
-   * if the user is requesting location updates.
-   */
   private void setButtonsEnabledState()
   {
-    if (mRequestingLocationUpdates)
+    if (this.mRequestingLocationUpdates)
     {
-      mStartStopButton.setText(R.string.stop_updates);
+      startStopWatch();
+      this.mStartStopButton.setText(R.string.stop_updates);
     } else
     {
-      mStartStopButton.setText(R.string.start_updates);
+      this.mStartStopButton.setText(R.string.start_updates);
     }
   }
 
-  /**
-   * Sets the value of the UI fields for the location latitude, longitude and last update time.
-   */
+  //Sets the value of each UI field
   private void updateLocationUI()
   {
-    if (mCurrentLocation != null)
+    if (this.mCurrentLocation != null)
     {
       String currTime = utils.getCurrentDateTime();
-      String xx = currTime + "," + mCurrentLocation.getLatitude() + "," + mCurrentLocation.getLongitude();
+      String xx = currTime + "," + this.mCurrentLocation.getLatitude() + "," + this.mCurrentLocation.getLongitude();
 
-      locationList.add(xx);
+      this.locationList.add(xx);
 
       double mSpeed;
-      float currentSpeed = mCurrentLocation.getSpeed();
+      float currentSpeed = this.mCurrentLocation.getSpeed();
 
-      switch (mPreference)
+      switch (this.mPreference)
       {
         case "mph":
           mSpeed = (double) currentSpeed * mph;
@@ -506,36 +437,46 @@ public class MainActivity extends AppCompatActivity
           break;
       }
 
-      if (mSpeed > topSpeed)
+      if (mSpeed > this.topSpeed)
       {
-        topSpeed = mSpeed;
+        this.topSpeed = mSpeed;
+        String maxSpeedStr = String.format(Locale.getDefault(), "%.2f", this.topSpeed);
+        this.mMaxSpeed.setText(String.valueOf(maxSpeedStr));
       }
       if (mSpeed != 0)
       {
         this.speedArray.add(mSpeed);
       }
 
+      double mAverage = utils.calculateAverage(speedArray);
+      this.avgSpeed = String.format(Locale.getDefault(), "%.2f", mAverage);
+      this.mAvgSpeed.setText(this.avgSpeed);
+
       String speedStr = String.format(Locale.getDefault(), "%.2f", mSpeed);
       this.mSpeedTextView.setText(speedStr);
 
+      // check if user has top-speed alert on
+      if(this.mOnOrOff.equalsIgnoreCase("on"))
+      {
+        if(this.topSpeed > this.mTopSpeedLimit)
+        {
+          int toneType = ToneGenerator.TONE_CDMA_ALERT_INCALL_LITE;
+          int durationMs = 500;
+          this.toneGenerator.startTone(toneType, durationMs);
+        }
+      }
     }
   }
 
-  /**
-   * Removes location updates from the FusedLocationApi.
-   */
+  //Removes location updates from the FusedLocationApi.
   private void stopLocationUpdates()
   {
-    if (!mRequestingLocationUpdates)
+    if (!this.mRequestingLocationUpdates)
     {
-      Log.d(TAG, "stopLocationUpdates: updates never requested, no-op.");
       return;
     }
 
-    // It is a good practice to remove location requests when the activity is in a paused or
-    // stopped state. Doing so helps battery performance and is especially
-    // recommended in applications that request frequent location updates.
-    mFusedLocationClient.removeLocationUpdates(mLocationCallback)
+    this.mFusedLocationClient.removeLocationUpdates(this.mLocationCallback)
       .addOnCompleteListener(this, new OnCompleteListener<Void>()
       {
         @Override
@@ -545,8 +486,6 @@ public class MainActivity extends AppCompatActivity
           setButtonsEnabledState();
         }
       });
-
-    //getResults();
   }
 
 
@@ -554,16 +493,14 @@ public class MainActivity extends AppCompatActivity
   public void onResume()
   {
     super.onResume();
-    // Within {@code onPause()}, we remove location updates. Here, we resume receiving
-    // location updates if the user has requested them.
-    if (mRequestingLocationUpdates && checkPermissions())
+
+    if (this.mRequestingLocationUpdates && checkPermissions())
     {
       startLocationUpdates();
     } else if (!checkPermissions())
     {
       requestPermissions();
     }
-
     updateUI();
   }
 
@@ -571,14 +508,11 @@ public class MainActivity extends AppCompatActivity
   protected void onPause()
   {
     super.onPause();
-
     // Remove location updates to save battery.
     stopLocationUpdates();
   }
 
-  /**
-   * Stores activity data in the Bundle.
-   */
+  //Stores activity data in the Bundle.
   public void onSaveInstanceState(Bundle savedInstanceState)
   {
     savedInstanceState.putBoolean(KEY_REQUESTING_LOCATION_UPDATES, mRequestingLocationUpdates);
@@ -639,10 +573,6 @@ public class MainActivity extends AppCompatActivity
         });
     } else
     {
-      Log.i(TAG, "Requesting permission");
-      // Request permission. It's possible this can be auto answered if device policy
-      // sets the permission in a given state or the user denied the permission
-      // previously and checked "Never ask again".
       ActivityCompat.requestPermissions(MainActivity.this,
         new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
         REQUEST_PERMISSIONS_REQUEST_CODE);
@@ -674,16 +604,6 @@ public class MainActivity extends AppCompatActivity
       } else
       {
         // Permission denied.
-
-        // Notify the user via a SnackBar that they have rejected a core permission for the
-        // app, which makes the Activity useless. In a real app, core permissions would
-        // typically be best requested during a welcome-screen flow.
-
-        // Additionally, it is important to remember that a permission might have been
-        // rejected without asking the user for permission (device policy or "Never ask
-        // again" prompts). Therefore, a user interface affordance is typically implemented
-        // when permissions are denied. Otherwise, your app could appear unresponsive to
-        // touches or interactions which have required permissions.
         showSnackbar(R.string.permission_denied_explanation,
           R.string.settings, new View.OnClickListener()
           {
@@ -707,22 +627,23 @@ public class MainActivity extends AppCompatActivity
 
   public void getResults()
   {
+    stopStopWatch();
 
-    if (locationList.size() > 0)
+    if (this.locationList.size() > 0)
     {
-      String str1 = locationList.get(0);
+      String str1 = this.locationList.get(0);
       List<String> item1 = Arrays.asList(str1.split("\\s*,\\s*"));
 
-      startTime = item1.get(0);
-      startLatitude = item1.get(1);
-      startLongitude = item1.get(2);
+      this.startTime = item1.get(0);
+      this.startLatitude = item1.get(1);
+      this.startLongitude = item1.get(2);
 
-      String str2 = locationList.get(locationList.size() - 1);
+      String str2 = this.locationList.get(this.locationList.size() - 1);
       List<String> item2 = Arrays.asList(str2.split("\\s*,\\s*"));
 
-      stopTime = item2.get(0);
-      stopLatitude = item2.get(1);
-      stopLongitude = item2.get(2);
+      this.stopTime = item2.get(0);
+      this.stopLatitude = item2.get(1);
+      this.stopLongitude = item2.get(2);
 
       passData();
     }
@@ -732,26 +653,120 @@ public class MainActivity extends AppCompatActivity
   public void passData()
   {
 
+    //  do total time
+
+    //String totalTime = mStopWatch.getText().toString();
     HashMap<String, String> hashMap = new HashMap<>();
 
-    hashMap.put("start_time", startTime);
-    hashMap.put("start_lat", startLatitude);
-    hashMap.put("start_lng", startLongitude);
+    hashMap.put("start_time", this.startTime);
+    hashMap.put("start_lat", this.startLatitude);
+    hashMap.put("start_lng", this.startLongitude);
 
-    hashMap.put("stop_time", stopTime);
-    hashMap.put("stop_lat", stopLatitude);
-    hashMap.put("stop_lng", stopLongitude);
+    hashMap.put("total_time", String.valueOf(this.MillisecondTime));
 
-    double mAverage = utils.calculateAverage(speedArray);
-    String avgSpeed = String.format(Locale.getDefault(), "%.2f", mAverage);
-    hashMap.put("avg_speed", avgSpeed);
+    hashMap.put("stop_time", this.stopTime);
+    hashMap.put("stop_lat", this.stopLatitude);
+    hashMap.put("stop_lng", this.stopLongitude);
 
-    String maxSpeed = String.format(Locale.getDefault(), "%.2f", topSpeed);
+    hashMap.put("avg_speed", this.avgSpeed);
+
+    String maxSpeed = String.format(Locale.getDefault(), "%.2f", this.topSpeed);
     hashMap.put("max_speed", String.valueOf(maxSpeed));
 
     Intent intent = new Intent(this, TripResult.class);
     intent.putExtra("map", hashMap);
     startActivity(intent);
   }
+
+  public void startStopWatch()
+  {
+    this.StartTime = SystemClock.uptimeMillis();
+    this.handler.postDelayed(runnable, 0);
+  }
+
+  public void stopStopWatch()
+  {
+    this.TimeBuff += this.MillisecondTime;
+    this.handler.removeCallbacks(runnable);
+  }
+
+  public Runnable runnable = new Runnable() {
+
+    public void run() {
+
+      //long UpdateTime = 0L;
+      MillisecondTime = SystemClock.uptimeMillis() - StartTime;
+
+      long UpdateTime = TimeBuff + MillisecondTime;
+      int seconds = (int) (UpdateTime / 1000);
+      int minutes = seconds / 60;
+      seconds = seconds % 60;
+      mStopWatch.setText("" + minutes + ":"
+        + String.format(Locale.getDefault(),"%02d", seconds));
+
+      handler.postDelayed(this, 0);
+    }
+
+  };
+
+
+  public void initialiseWidgets()
+  {
+    // Locate the UI widgets and set font.
+    this.mStartStopButton = (Button) findViewById(R.id.start_updates_button);
+    this.mStartStopButton.setTypeface(this.custom_font);
+
+    this.mSpeedTextView = (TextView) findViewById(R.id.speed_text);
+    this.mSpeedTextView.setTypeface(this.custom_font);
+
+    this.mStopWatch = (TextView) findViewById(R.id.tvStopWatch);
+    this.mStopWatch.setTypeface(this.custom_font);
+
+
+    this.mSpeedTypeTextView = (TextView) findViewById(R.id.speedTypeTextView);
+    this.mSpeedTypeTextView.setTypeface(this.custom_font);
+
+    this.mMaxSpeed = (TextView) findViewById(R.id.textViewMaxSpeed);
+    this.mMaxSpeed.setTypeface(this.custom_font);
+
+    this.mAvgSpeed = (TextView) findViewById(R.id.textViewAverageSpeed);
+    this.mAvgSpeed.setTypeface(this.custom_font);
+
+  }
+
+  public void retrieveSharedPreferences()
+  {
+    //Reading from SharedPreferences
+    SharedPreferences pref = getApplicationContext().getSharedPreferences("speedPref", MODE_PRIVATE);
+    this.mPreference = pref.getString("pref_type", null);
+    String temp = pref.getString("top_speed", null);
+    this.mOnOrOff = pref.getString("on_off", null);
+
+    if (this.mPreference != null)
+    {
+      this.mSpeedTypeTextView.setText(this.mPreference);
+    } else
+    {
+      this.mPreference = "miles";
+    }
+
+    if(temp !=null)
+    {
+      this.mTopSpeedLimit = Integer.valueOf(temp);
+    } else
+    {
+      this.mTopSpeedLimit = -1;
+    }
+
+    if (this.mOnOrOff == null)
+    {
+      this.mOnOrOff = "off";
+    }
+
+    Log.w("mPreference ", "" + mPreference);
+    Log.w("mTopSpeedLimit ", "" + mTopSpeedLimit);
+    Log.w("mOnOrOff ", "" + mOnOrOff);
+  }
+
 }
 
